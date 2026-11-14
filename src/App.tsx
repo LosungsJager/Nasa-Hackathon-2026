@@ -154,7 +154,7 @@ export function App() {
             onClick={() => setViewMode('map')}
           >
             <MapIcon size={15} />
-            <span>Mapa &amp; Talhão</span>
+            <span>Mapa do Talhão</span>
           </button>
           <button
             type="button"
@@ -163,7 +163,7 @@ export function App() {
             onClick={() => setViewMode('crops')}
           >
             <LayoutGrid size={15} />
-            <span>Dashboard de Culturas</span>
+            <span>Comparar Culturas</span>
           </button>
           <button
             type="button"
@@ -172,7 +172,7 @@ export function App() {
             onClick={() => setViewMode('methodology')}
           >
             <BookOpen size={15} />
-            <span>Dados &amp; Metodologia</span>
+            <span>Fontes NASA</span>
           </button>
         </nav>
 
@@ -251,31 +251,33 @@ export function App() {
                 />
 
                 {analysis && (
-                  <div className="indicators-strip" aria-label="Indicadores do talhão">
+                  <div className="indicators-strip" aria-label="Resumo do talhão">
                     <div className="ind-cell measured">
-                      <span className="ind-tag medido">MEDIDO • POWER</span>
+                      <span className="ind-tag medido">CLIMA • 20 ANOS (NASA)</span>
                       <strong>
-                        {analysis.indicators.annualAvgTempC}°C • {analysis.indicators.annualMeanPrecipMm} mm/ano • UR {analysis.indicators.meanRh2mPct}%
+                        {analysis.indicators.annualAvgTempC}°C • {analysis.indicators.annualMeanPrecipMm} mm/ano
                       </strong>
                     </div>
                     <div className="ind-cell measured">
-                      <span className="ind-tag medido">MEDIDO • EXTREMOS</span>
+                      <span className="ind-tag medido">RISCOS NO ANO (NASA)</span>
                       <strong>
-                        Geada: {analysis.indicators.frostDaysPerYear}d • Calor ≥32°C: {analysis.indicators.heatStressDaysPerYear}d • P95: {analysis.indicators.extremeRainDaysPerYear}d
+                        Geada: {analysis.indicators.frostDaysPerYear}d • Calor ≥32°C: {analysis.indicators.heatStressDaysPerYear}d
                       </strong>
                     </div>
                     <div className="ind-cell estimated">
-                      <span className="ind-tag derivado">DERIVADO • ET₀</span>
+                      <span className="ind-tag derivado">ÁGUA NA SAFRA</span>
                       <strong>
-                        {analysis.indicators.meanEt0MmDay} mm/d • Déficit {analysis.indicators.seasonalWaterDeficitMm} mm
+                        {analysis.indicators.seasonalWaterDeficitMm > 0
+                          ? `Falta média: ${analysis.indicators.seasonalWaterDeficitMm} mm`
+                          : 'Chuva suficiente na safra'}
                       </strong>
                     </div>
                     <div className="ind-cell estimated">
-                      <span className="ind-tag derivado">DERIVADO • EROSÃO / DEM</span>
+                      <span className="ind-tag derivado">SOLO E RELEVO</span>
                       <strong>
-                        {analysis.indicators.estimatedErosionIndex}/100 ({analysis.indicators.erosionLevel})
+                        Erosão {analysis.indicators.erosionLevel}
                         {analysis.indicators.slopePct !== undefined
-                          ? ` • Decliv. ${analysis.indicators.slopePct}% (${analysis.indicators.meanElevationM} m)`
+                          ? ` • Decliv. ${analysis.indicators.slopePct}%`
                           : ''}
                       </strong>
                     </div>

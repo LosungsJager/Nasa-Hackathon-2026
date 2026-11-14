@@ -1,4 +1,4 @@
-import { CheckSquare, Globe, Layers, Leaf, Sliders } from 'lucide-react';
+import { CheckSquare, ChevronDown, Globe, Layers, Leaf, Sliders } from 'lucide-react';
 import type {
   CropId,
   CropInfo,
@@ -25,18 +25,18 @@ interface ControlSidebarProps {
 }
 
 const NASA_BASEMAP_OPTIONS: { id: NasaBasemapId; label: string; scale: string }[] = [
-  { id: 'hybrid_hd', label: 'Satélite HD + Ruas', scale: 'Zoom 18' },
-  { id: 'osm_streets', label: 'Mapa de Ruas (OSM)', scale: 'Zoom 19' },
-  { id: 'viirs_truecolor', label: 'NASA VIIRS True Color', scale: '375 m' },
-  { id: 'modis_truecolor', label: 'NASA MODIS True Color', scale: '250 m' },
-  { id: 'bluemarble', label: 'NASA Blue Marble', scale: '500 m' },
+  { id: 'hybrid_hd', label: 'Satélite + Ruas', scale: 'Detalhado' },
+  { id: 'osm_streets', label: 'Mapa de Ruas', scale: 'Estradas' },
+  { id: 'viirs_truecolor', label: 'NASA VIIRS', scale: 'Regional' },
+  { id: 'modis_truecolor', label: 'NASA MODIS', scale: 'Regional' },
+  { id: 'bluemarble', label: 'NASA Blue Marble', scale: 'Global' },
 ];
 
 const GIBS_OPTIONS: { id: GibsLayerId; label: string; scale: string }[] = [
-  { id: 'none', label: 'Sem sobreposição', scale: 'Base nítida' },
-  { id: 'modis_ndvi', label: 'MODIS NDVI (8d)', scale: '250 m' },
-  { id: 'smap_l4', label: 'SMAP L4 Umidade', scale: '9 km' },
-  { id: 'gpm_imerg', label: 'GPM IMERG Chuva', scale: '10 km' },
+  { id: 'none', label: 'Desligada', scale: 'Mapa limpo' },
+  { id: 'modis_ndvi', label: 'Vegetação (NDVI)', scale: 'NASA 250m' },
+  { id: 'smap_l4', label: 'Umidade do solo', scale: 'NASA 9km' },
+  { id: 'gpm_imerg', label: 'Chuva recente', scale: 'NASA 10km' },
 ];
 
 export function ControlSidebar({
@@ -57,17 +57,12 @@ export function ControlSidebar({
     onPrioritiesChange({ ...priorities, [key]: value });
   };
 
-  const wWater = Math.max(5, priorities.lessWater);
-  const wIncome = Math.max(5, priorities.moreIncome);
-  const wSoil = Math.max(5, priorities.improveSoil + priorities.reduceErosion * 0.6);
-  const wTotal = wWater + wIncome + wSoil;
-
   return (
-    <aside className="control-sidebar" aria-label="Parâmetros do talhão">
+    <aside className="control-sidebar" aria-label="Configuração da lavoura">
       <div className="sidebar-section">
         <div className="section-title">
           <Leaf size={13} />
-          <span>Cultura atual</span>
+          <span>1. O que você planta hoje?</span>
         </div>
         <select
           aria-label="Cultura atual"
@@ -77,7 +72,7 @@ export function ControlSidebar({
         >
           {(Object.keys(cropsCatalog) as CropId[]).map((id) => (
             <option key={id} value={id}>
-              {cropsCatalog[id].name} (Kc {cropsCatalog[id].kc})
+              {cropsCatalog[id].name}
             </option>
           ))}
         </select>
@@ -86,7 +81,7 @@ export function ControlSidebar({
       <div className="sidebar-section">
         <div className="section-title">
           <CheckSquare size={13} />
-          <span>Restrições</span>
+          <span>2. O que tem na propriedade?</span>
         </div>
         <div className="constraints-list">
           <label className="check-row">
@@ -97,7 +92,7 @@ export function ControlSidebar({
                 onConstraintsChange({ ...constraints, hasIrrigation: e.target.checked })
               }
             />
-            <span>Irrigação suplementar</span>
+            <span>Tenho irrigação</span>
           </label>
           <label className="check-row">
             <input
@@ -107,7 +102,7 @@ export function ControlSidebar({
                 onConstraintsChange({ ...constraints, hasNoTillPlanter: e.target.checked })
               }
             />
-            <span>Plantadeira direta</span>
+            <span>Faço plantio direto</span>
           </label>
           <label className="check-row">
             <input
@@ -117,7 +112,7 @@ export function ControlSidebar({
                 onConstraintsChange({ ...constraints, hasLivestock: e.target.checked })
               }
             />
-            <span>Integração gado / leite</span>
+            <span>Tenho gado / pastagem</span>
           </label>
         </div>
       </div>
@@ -125,16 +120,12 @@ export function ControlSidebar({
       <div className="sidebar-section">
         <div className="section-title">
           <Sliders size={13} />
-          <span>Pesos do score</span>
-        </div>
-        <div className="weights-summary">
-          Água {Math.round((wWater / wTotal) * 100)}% • Renda{' '}
-          {Math.round((wIncome / wTotal) * 100)}% • Solo {Math.round((wSoil / wTotal) * 100)}%
+          <span>3. Sua prioridade na safra</span>
         </div>
         <div className="priority-sliders">
           <label className="slider-row">
             <div className="slider-header">
-              <span>Economizar água</span>
+              <span>Economizar água / evitar seca</span>
               <span className="slider-val">{priorities.lessWater}%</span>
             </div>
             <input
@@ -148,7 +139,7 @@ export function ControlSidebar({
 
           <label className="slider-row">
             <div className="slider-header">
-              <span>Renda / rendimento</span>
+              <span>Mais colheita e renda</span>
               <span className="slider-val">{priorities.moreIncome}%</span>
             </div>
             <input
@@ -162,7 +153,7 @@ export function ControlSidebar({
 
           <label className="slider-row">
             <div className="slider-header">
-              <span>Cobertura e solo</span>
+              <span>Proteger e adubar o solo</span>
               <span className="slider-val">{priorities.improveSoil}%</span>
             </div>
             <input
@@ -176,7 +167,7 @@ export function ControlSidebar({
 
           <label className="slider-row">
             <div className="slider-header">
-              <span>Conter erosão</span>
+              <span>Segurar erosão da chuva</span>
               <span className="slider-val">{priorities.reduceErosion}%</span>
             </div>
             <input
@@ -190,91 +181,103 @@ export function ControlSidebar({
         </div>
       </div>
 
-      <div className="sidebar-section">
-        <div className="section-title">
-          <Globe size={13} />
-          <span>Mapa Base NASA (GIBS)</span>
-        </div>
-        <div className="layer-buttons-list">
-          {NASA_BASEMAP_OPTIONS.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              className={`layer-row-btn ${basemap === opt.id ? 'active' : ''}`}
-              onClick={() => onBasemapChange(opt.id)}
-            >
-              <span>{opt.label}</span>
-              <small>{opt.scale}</small>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="sidebar-section">
-        <div className="section-title">
-          <Layers size={13} />
-          <span>Sobreposição NASA GIBS</span>
-        </div>
-        <div className="layer-buttons-list">
-          {GIBS_OPTIONS.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              className={`layer-row-btn ${gibsLayer === opt.id ? 'active' : ''}`}
-              onClick={() => onGibsLayerChange(opt.id)}
-            >
-              <span>{opt.label}</span>
-              <small>{opt.scale}</small>
-            </button>
-          ))}
-        </div>
-      </div>
-
       {analysis && (
         <div className="sidebar-section">
           <div className="soil-box">
             <strong>{analysis.soil.municipality} ({analysis.areaHa} ha)</strong>
-            <p>
-              {analysis.soil.soilClass} • AWC {analysis.soil.availableWaterCapacityMm} mm
+            <p>{analysis.soil.soilClass}</p>
+            <p className="soil-src">
+              Retenção de água: {analysis.soil.waterRetentionCapacity} ({analysis.soil.availableWaterCapacityMm} mm)
             </p>
-            <p className="soil-src">{analysis.soil.dataSourceLabel}</p>
-          </div>
-
-          <div className="cmr-box">
-            <span className="cmr-title">Catálogo NASA CMR &amp; Copernicus:</span>
-            {analysis.indicators.cmrGranules.map((g) => (
-              <div key={g.shortName} className="cmr-row">
-                <span>{g.dataset}</span>
-                <span className="cmr-val">
-                  {g.status === 'ok'
-                    ? `${g.granuleCount} (${g.latestDate ?? 's/d'})`
-                    : 'offline'}
-                </span>
-              </div>
-            ))}
-            {analysis.indicators.sentinel2Summary && (
-              <div className="cmr-row">
-                <span>Sentinel-2 L2A (10m)</span>
-                <span className="cmr-val">
-                  {analysis.indicators.sentinel2Summary.status === 'ok'
-                    ? `${analysis.indicators.sentinel2Summary.sceneCount} (${analysis.indicators.sentinel2Summary.latestDate ?? 's/d'})`
-                    : 'offline'}
-                </span>
-              </div>
-            )}
-            {analysis.indicators.era5Summary && (
-              <div className="cmr-row">
-                <span>ECMWF ERA5 (2024)</span>
-                <span className="cmr-val">
-                  {analysis.indicators.era5Summary.status === 'ok'
-                    ? `${analysis.indicators.era5Summary.meanTempC}°C • ${analysis.indicators.era5Summary.totalPrecipMm}mm`
-                    : 'offline'}
-                </span>
-              </div>
-            )}
           </div>
         </div>
       )}
+
+      <div className="sidebar-section">
+        <details className="sidebar-details">
+          <summary className="details-summary">
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Layers size={13} />
+              Visão do mapa e satélites
+            </span>
+            <ChevronDown size={14} />
+          </summary>
+
+          <div className="details-body">
+            <div className="section-title" style={{ marginTop: 8 }}>
+              <Globe size={12} />
+              <span>Tipo de mapa</span>
+            </div>
+            <div className="layer-buttons-list">
+              {NASA_BASEMAP_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={`layer-row-btn ${basemap === opt.id ? 'active' : ''}`}
+                  onClick={() => onBasemapChange(opt.id)}
+                >
+                  <span>{opt.label}</span>
+                  <small>{opt.scale}</small>
+                </button>
+              ))}
+            </div>
+
+            <div className="section-title" style={{ marginTop: 10 }}>
+              <Layers size={12} />
+              <span>Camada de satélite (NASA)</span>
+            </div>
+            <div className="layer-buttons-list">
+              {GIBS_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={`layer-row-btn ${gibsLayer === opt.id ? 'active' : ''}`}
+                  onClick={() => onGibsLayerChange(opt.id)}
+                >
+                  <span>{opt.label}</span>
+                  <small>{opt.scale}</small>
+                </button>
+              ))}
+            </div>
+
+            {analysis && (
+              <div className="cmr-box" style={{ marginTop: 10 }}>
+                <span className="cmr-title">Fontes consultadas no talhão:</span>
+                {analysis.indicators.cmrGranules.map((g) => (
+                  <div key={g.shortName} className="cmr-row">
+                    <span>{g.dataset}</span>
+                    <span className="cmr-val">
+                      {g.status === 'ok'
+                        ? `${g.granuleCount} (${g.latestDate ?? 's/d'})`
+                        : 'offline'}
+                    </span>
+                  </div>
+                ))}
+                {analysis.indicators.sentinel2Summary && (
+                  <div className="cmr-row">
+                    <span>Sentinel-2 L2A (10m)</span>
+                    <span className="cmr-val">
+                      {analysis.indicators.sentinel2Summary.status === 'ok'
+                        ? `${analysis.indicators.sentinel2Summary.sceneCount} (${analysis.indicators.sentinel2Summary.latestDate ?? 's/d'})`
+                        : 'offline'}
+                    </span>
+                  </div>
+                )}
+                {analysis.indicators.era5Summary && (
+                  <div className="cmr-row">
+                    <span>ECMWF ERA5 (2024)</span>
+                    <span className="cmr-val">
+                      {analysis.indicators.era5Summary.status === 'ok'
+                        ? `${analysis.indicators.era5Summary.meanTempC}°C • ${analysis.indicators.era5Summary.totalPrecipMm}mm`
+                        : 'offline'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </details>
+      </div>
     </aside>
   );
 }

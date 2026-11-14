@@ -50,21 +50,21 @@ export function RotationDrawer({
                   <div>
                     {sc.recommended && (
                       <span className="recommended-tag">
-                        <ShieldCheck size={11} /> Maior score ponderado
+                        <ShieldCheck size={11} /> Melhor opção
                       </span>
                     )}
                     <h3>{sc.title}</h3>
                     <p className="scenario-subtitle">{sc.subtitle}</p>
                   </div>
-                  <div className="overall-score" title="Índice comparativo (0–100) calculado pelo modelo FAO-56 e manejo">
+                  <div className="overall-score" title="Nota comparativa (0–100) conforme suas prioridades">
                     <span className="score-num">{sc.scores.overall}</span>
-                    <span className="score-label">Modelo</span>
+                    <span className="score-label">Nota</span>
                   </div>
                 </div>
 
                 <div className="panel-metrics-line">
-                  <span>P10: <strong>{sc.backtest.p10YieldPct}%</strong></span>
-                  <span>P50: <strong>{sc.backtest.p50YieldPct}%</strong></span>
+                  <span>Ano seco: <strong>{sc.backtest.p10YieldPct}%</strong></span>
+                  <span>Normal: <strong>{sc.backtest.p50YieldPct}%</strong></span>
                   <span>Quebra: <strong>{sc.backtest.failureRiskPct}%</strong></span>
                 </div>
 
@@ -77,7 +77,7 @@ export function RotationDrawer({
                     <strong className="cb-val">{sc.scores.waterIndex}</strong>
                   </div>
                   <div className="compact-bar-row">
-                    <span className="cb-label"><TrendingUp size={11} /> Rend.</span>
+                    <span className="cb-label"><TrendingUp size={11} /> Colheita</span>
                     <div className="bar-track">
                       <div className="bar-fill yield" style={{ width: `${sc.scores.yieldIndex}%` }} />
                     </div>
@@ -94,9 +94,9 @@ export function RotationDrawer({
 
                 {sc.recommended && (
                   <div className="panel-rec-summary">
-                    <span>ETc poupada: <strong>{sc.impact.waterSavedM3Ha} m³/ha</strong></span>
+                    <span>Água poupada: <strong>{sc.impact.waterSavedM3Ha} m³/ha</strong></span>
                     <span>•</span>
-                    <span>N: <strong>{sc.impact.nitrogenFixedKgHa}</strong></span>
+                    <span>Nitrogênio: <strong>{sc.impact.nitrogenFixedKgHa}</strong></span>
                   </div>
                 )}
               </article>

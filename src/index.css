@@ -412,6 +412,34 @@ body,
   color: #5c4936;
 }
 
+.sidebar-details {
+  border: 1px solid var(--border-subtle);
+  border-radius: 2px;
+  background: var(--bg-subtle);
+}
+
+.details-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.details-summary::-webkit-details-marker {
+  display: none;
+}
+
+.details-body {
+  padding: 0 10px 10px;
+  border-top: 1px solid var(--border-subtle);
+  background: #ffffff;
+}
+
 /* Map Stage */
 .map-stage {
   flex: 1;
