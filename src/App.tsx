@@ -226,27 +226,59 @@ export function App() {
 
         <main className="map-stage">
           {viewMode === 'map' && (
-            <>
-              <FarmMap
-                center={mapCenter}
-                zoom={mapZoom}
-                analysis={analysis}
-                gibsLayer={gibsLayer}
-                isDrawing={isDrawing}
-                onStartDrawing={() => setIsDrawing(true)}
-                onCancelDrawing={() => setIsDrawing(false)}
-                onPolygonComplete={handlePolygonComplete}
-                onClearPolygon={() => setAnalysis(null)}
-                backtestSeries={scenarios[0]?.backtest.yearlySeries ?? []}
-                onOpenCropDashboard={() => setViewMode('crops')}
-              />
+            <div className="workbench-split">
+              <div className="workbench-center">
+                <FarmMap
+                  center={mapCenter}
+                  zoom={mapZoom}
+                  analysis={analysis}
+                  gibsLayer={gibsLayer}
+                  isDrawing={isDrawing}
+                  onStartDrawing={() => setIsDrawing(true)}
+                  onCancelDrawing={() => setIsDrawing(false)}
+                  onPolygonComplete={handlePolygonComplete}
+                  onClearPolygon={() => setAnalysis(null)}
+                  backtestSeries={scenarios[0]?.backtest.yearlySeries ?? []}
+                  onOpenCropDashboard={() => setViewMode('crops')}
+                />
+
+                {analysis && (
+                  <div className="indicators-strip" aria-label="Indicadores do talhão">
+                    <div className="ind-cell measured">
+                      <span className="ind-tag medido">MEDIDO • POWER</span>
+                      <strong>
+                        {analysis.indicators.annualAvgTempC}°C • {analysis.indicators.annualMeanPrecipMm} mm/ano
+                      </strong>
+                    </div>
+                    <div className="ind-cell measured">
+                      <span className="ind-tag medido">MEDIDO • EXTREMOS</span>
+                      <strong>
+                        Geada: {analysis.indicators.frostDaysPerYear}d • Chuva P95: {analysis.indicators.extremeRainDaysPerYear}d
+                      </strong>
+                    </div>
+                    <div className="ind-cell estimated">
+                      <span className="ind-tag derivado">DERIVADO • ET₀</span>
+                      <strong>
+                        {analysis.indicators.meanEt0MmDay} mm/d • Déficit {analysis.indicators.seasonalWaterDeficitMm} mm
+                      </strong>
+                    </div>
+                    <div className="ind-cell estimated">
+                      <span className="ind-tag derivado">DERIVADO • EROSÃO</span>
+                      <strong>
+                        {analysis.indicators.estimatedErosionIndex}/100 ({analysis.indicators.erosionLevel})
+                      </strong>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <RotationDrawer
                 scenarios={scenarios}
                 areaHa={analysis?.areaHa ?? null}
                 isLoading={isLoading}
+                onOpenDetails={() => setViewMode('crops')}
               />
-            </>
+            </div>
           )}
 
           {viewMode === 'crops' && (

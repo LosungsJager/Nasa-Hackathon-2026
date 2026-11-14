@@ -1,10 +1,4 @@
-import {
-  CheckSquare,
-  Layers,
-  Leaf,
-  Satellite,
-  Sliders,
-} from 'lucide-react';
+import { CheckSquare, Layers, Leaf, Sliders } from 'lucide-react';
 import type {
   CropId,
   CropInfo,
@@ -29,9 +23,9 @@ interface ControlSidebarProps {
 
 const GIBS_OPTIONS: { id: GibsLayerId; label: string; scale: string }[] = [
   { id: 'none', label: 'Apenas imagem base', scale: 'Esri' },
-  { id: 'modis_ndvi', label: 'MODIS NDVI (8 dias)', scale: '250 m' },
-  { id: 'smap_l4', label: 'SMAP L4 Zona Radicular', scale: '9 km' },
-  { id: 'gpm_imerg', label: 'GPM IMERG Precipitação', scale: '10 km' },
+  { id: 'modis_ndvi', label: 'MODIS NDVI (8d)', scale: '250 m' },
+  { id: 'smap_l4', label: 'SMAP L4 Umidade', scale: '9 km' },
+  { id: 'gpm_imerg', label: 'GPM IMERG Chuva', scale: '10 km' },
 ];
 
 export function ControlSidebar({
@@ -56,12 +50,11 @@ export function ControlSidebar({
   const wTotal = wWater + wIncome + wSoil;
 
   return (
-    <aside className="control-sidebar" aria-label="Configurações do talhão">
-      {/* 1. Crop Selection */}
+    <aside className="control-sidebar" aria-label="Parâmetros do talhão">
       <div className="sidebar-section">
         <div className="section-title">
-          <Leaf size={14} />
-          <span>Cultura atual (editável)</span>
+          <Leaf size={13} />
+          <span>Cultura atual</span>
         </div>
         <select
           aria-label="Cultura atual"
@@ -77,11 +70,10 @@ export function ControlSidebar({
         </select>
       </div>
 
-      {/* 2. Constraints */}
       <div className="sidebar-section">
         <div className="section-title">
-          <CheckSquare size={14} />
-          <span>Restrições da propriedade</span>
+          <CheckSquare size={13} />
+          <span>Restrições</span>
         </div>
         <div className="constraints-list">
           <label className="check-row">
@@ -92,7 +84,7 @@ export function ControlSidebar({
                 onConstraintsChange({ ...constraints, hasIrrigation: e.target.checked })
               }
             />
-            <span>Possui irrigação suplementar</span>
+            <span>Irrigação suplementar</span>
           </label>
           <label className="check-row">
             <input
@@ -102,7 +94,7 @@ export function ControlSidebar({
                 onConstraintsChange({ ...constraints, hasNoTillPlanter: e.target.checked })
               }
             />
-            <span>Maquinário de plantio direto</span>
+            <span>Plantadeira direta</span>
           </label>
           <label className="check-row">
             <input
@@ -112,19 +104,18 @@ export function ControlSidebar({
                 onConstraintsChange({ ...constraints, hasLivestock: e.target.checked })
               }
             />
-            <span>Integração com gado / leite</span>
+            <span>Integração gado / leite</span>
           </label>
         </div>
       </div>
 
-      {/* 3. Farmer Priorities with explicit weights */}
       <div className="sidebar-section">
         <div className="section-title">
-          <Sliders size={14} />
-          <span>Prioridades e pesos do score</span>
+          <Sliders size={13} />
+          <span>Pesos do score</span>
         </div>
         <div className="weights-summary">
-          Pesos: Água {Math.round((wWater / wTotal) * 100)}% • Renda{' '}
+          Água {Math.round((wWater / wTotal) * 100)}% • Renda{' '}
           {Math.round((wIncome / wTotal) * 100)}% • Solo {Math.round((wSoil / wTotal) * 100)}%
         </div>
         <div className="priority-sliders">
@@ -186,97 +177,45 @@ export function ControlSidebar({
         </div>
       </div>
 
-      {/* 4. Live NASA GIBS Map Layer */}
       <div className="sidebar-section">
         <div className="section-title">
-          <Layers size={14} />
-          <span>Camada NASA GIBS (ao vivo)</span>
+          <Layers size={13} />
+          <span>Camada NASA GIBS</span>
         </div>
-        <div className="layer-buttons">
+        <div className="layer-buttons-list">
           {GIBS_OPTIONS.map((opt) => (
             <button
               key={opt.id}
               type="button"
-              className={`layer-btn ${gibsLayer === opt.id ? 'active' : ''}`}
+              className={`layer-row-btn ${gibsLayer === opt.id ? 'active' : ''}`}
               onClick={() => onGibsLayerChange(opt.id)}
             >
-              <div className="layer-btn-text">
-                <span>{opt.label}</span>
-                <small>{opt.scale}</small>
-              </div>
+              <span>{opt.label}</span>
+              <small>{opt.scale}</small>
             </button>
           ))}
         </div>
       </div>
 
-      {/* 5. Field Indicators: Measured vs Derived */}
       {analysis && (
         <div className="sidebar-section">
-          <div className="section-title">
-            <Satellite size={14} />
-            <span>Indicadores do talhão</span>
-            <span
-              className={`prov-badge ${
-                analysis.indicators.powerSource === 'live-daily' ? 'medido' : 'derivado'
-              }`}
-            >
-              {analysis.indicators.powerSource === 'live-daily'
-                ? 'POWER medido'
-                : 'Offline (estimado)'}
-            </span>
-          </div>
-
-          <div className="telemetry-grid">
-            <div className="telemetry-card measured">
-              <span className="tel-label">POWER T média / Chuva</span>
-              <strong className="tel-val">
-                {analysis.indicators.annualAvgTempC}°C • {analysis.indicators.annualMeanPrecipMm}mm
-              </strong>
-              <small>Medido ({analysis.indicators.powerPeriod})</small>
-            </div>
-
-            <div className="telemetry-card measured">
-              <span className="tel-label">Geada / Chuva P95</span>
-              <strong className="tel-val">
-                {analysis.indicators.frostDaysPerYear}d • {analysis.indicators.extremeRainDaysPerYear}d/ano
-              </strong>
-              <small>Medido (Tmin ≤ 2°C / P95)</small>
-            </div>
-
-            <div className="telemetry-card estimated">
-              <span className="tel-label">ET₀ / Déficit sazonal</span>
-              <strong className="tel-val">
-                {analysis.indicators.meanEt0MmDay} mm/d • {analysis.indicators.seasonalWaterDeficitMm} mm
-              </strong>
-              <small>Derivado (Hargreaves)</small>
-            </div>
-
-            <div className="telemetry-card estimated">
-              <span className="tel-label">Índice de erosão</span>
-              <strong className="tel-val">
-                {analysis.indicators.estimatedErosionIndex}/100 ({analysis.indicators.erosionLevel})
-              </strong>
-              <small>Derivado (solo + chuva)</small>
-            </div>
-          </div>
-
           <div className="soil-box">
-            <strong>Solo ({analysis.soil.municipality})</strong>
+            <strong>{analysis.soil.municipality} ({analysis.areaHa} ha)</strong>
             <p>
-              {analysis.soil.soilClass} ({analysis.soil.texture}) • AWC {analysis.soil.availableWaterCapacityMm} mm •{' '}
-              <em>{analysis.soil.dataSourceLabel}</em>
+              {analysis.soil.soilClass} • AWC {analysis.soil.availableWaterCapacityMm} mm
             </p>
+            <p className="soil-src">{analysis.soil.dataSourceLabel}</p>
           </div>
 
           <div className="cmr-box">
-            <span className="cmr-title">Catálogo NASA CMR no polígono:</span>
+            <span className="cmr-title">Catálogo NASA CMR:</span>
             {analysis.indicators.cmrGranules.map((g) => (
               <div key={g.shortName} className="cmr-row">
                 <span>{g.dataset}</span>
                 <span className="cmr-val">
                   {g.status === 'ok'
-                    ? `${g.granuleCount} cenas (${g.latestDate ?? 's/d'})`
-                    : 'indisponível'}
+                    ? `${g.granuleCount} (${g.latestDate ?? 's/d'})`
+                    : 'offline'}
                 </span>
               </div>
             ))}
