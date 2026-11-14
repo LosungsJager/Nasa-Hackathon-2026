@@ -139,10 +139,10 @@ export function App() {
       <header className="top-bar">
         <div className="brand-group">
           <div className="brand-logo">
-            <img src="/logo.png" alt="Field Shift / Farmboost logo" className="brand-logo-img" />
+            <img src="/logo.png" alt="Farmboost logo" className="brand-logo-img" />
           </div>
           <div>
-            <h1>Field Shift</h1>
+            <h1>Farmboost</h1>
           </div>
         </div>
 

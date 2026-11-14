@@ -1,4 +1,4 @@
-# Field Shift — Apoio à Decisão de Rotação de Cultivos
+# Farmboost — Apoio à Decisão de Rotação de Cultivos
 
 Projeto desenvolvido pela equipe **Lösungsjäger** para o **NASA Space Apps Challenge 2026** (Sede Lajeado, RS — Vale do Taquari), respondendo ao desafio *Field Shift: Adapting Farms with NASA Data*.
 

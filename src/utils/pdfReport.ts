@@ -29,7 +29,7 @@ export function generateAgronomistPdf(
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(15);
-  doc.text('FIELD SHIFT — Relatório para o Agrônomo', margin, 12);
+  doc.text('FARMBOOST — Relatório para o Agrônomo', margin, 12);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.text(
@@ -248,5 +248,5 @@ export function generateAgronomistPdf(
     y + 7.5
   );
 
-  doc.save(`Relatorio_FieldShift_${soil.municipality.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+  doc.save(`Relatorio_Farmboost_${soil.municipality.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
 }
