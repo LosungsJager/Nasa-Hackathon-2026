@@ -120,65 +120,110 @@ export function ControlSidebar({
       <div className="sidebar-section">
         <div className="section-title">
           <Sliders size={13} />
-          <span>3. Sua prioridade na safra</span>
+          <span>3. Qual seu foco agora?</span>
         </div>
-        <div className="priority-sliders">
-          <label className="slider-row">
-            <div className="slider-header">
-              <span>Economizar água / evitar seca</span>
-              <span className="slider-val">{priorities.lessWater}%</span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={priorities.lessWater}
-              onChange={(e) => updatePriority('lessWater', Number(e.target.value))}
-            />
-          </label>
-
-          <label className="slider-row">
-            <div className="slider-header">
-              <span>Mais colheita e renda</span>
-              <span className="slider-val">{priorities.moreIncome}%</span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={priorities.moreIncome}
-              onChange={(e) => updatePriority('moreIncome', Number(e.target.value))}
-            />
-          </label>
-
-          <label className="slider-row">
-            <div className="slider-header">
-              <span>Proteger e adubar o solo</span>
-              <span className="slider-val">{priorities.improveSoil}%</span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={priorities.improveSoil}
-              onChange={(e) => updatePriority('improveSoil', Number(e.target.value))}
-            />
-          </label>
-
-          <label className="slider-row">
-            <div className="slider-header">
-              <span>Segurar erosão da chuva</span>
-              <span className="slider-val">{priorities.reduceErosion}%</span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={priorities.reduceErosion}
-              onChange={(e) => updatePriority('reduceErosion', Number(e.target.value))}
-            />
-          </label>
+        <div className="layer-buttons-list" style={{ marginBottom: 6 }}>
+          {[
+            {
+              label: 'Equilibrado (recomendado)',
+              vals: { lessWater: 75, moreIncome: 65, improveSoil: 80, reduceErosion: 60 },
+            },
+            {
+              label: 'Evitar falta de água / seca',
+              vals: { lessWater: 95, moreIncome: 50, improveSoil: 70, reduceErosion: 50 },
+            },
+            {
+              label: 'Focar em mais colheita',
+              vals: { lessWater: 45, moreIncome: 95, improveSoil: 55, reduceErosion: 40 },
+            },
+            {
+              label: 'Recuperar solo e conter erosão',
+              vals: { lessWater: 60, moreIncome: 45, improveSoil: 95, reduceErosion: 95 },
+            },
+          ].map((preset) => {
+            const isActive =
+              priorities.lessWater === preset.vals.lessWater &&
+              priorities.moreIncome === preset.vals.moreIncome &&
+              priorities.improveSoil === preset.vals.improveSoil &&
+              priorities.reduceErosion === preset.vals.reduceErosion;
+            return (
+              <button
+                key={preset.label}
+                type="button"
+                className={`layer-row-btn ${isActive ? 'active' : ''}`}
+                onClick={() => onPrioritiesChange(preset.vals)}
+              >
+                <span>{preset.label}</span>
+              </button>
+            );
+          })}
         </div>
+
+        <details className="sidebar-details">
+          <summary className="details-summary">
+            <span>Ajuste fino (%)</span>
+            <ChevronDown size={13} />
+          </summary>
+          <div className="details-body" style={{ paddingTop: 8 }}>
+            <div className="priority-sliders">
+              <label className="slider-row">
+                <div className="slider-header">
+                  <span>Economizar água</span>
+                  <span className="slider-val">{priorities.lessWater}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={priorities.lessWater}
+                  onChange={(e) => updatePriority('lessWater', Number(e.target.value))}
+                />
+              </label>
+
+              <label className="slider-row">
+                <div className="slider-header">
+                  <span>Mais colheita</span>
+                  <span className="slider-val">{priorities.moreIncome}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={priorities.moreIncome}
+                  onChange={(e) => updatePriority('moreIncome', Number(e.target.value))}
+                />
+              </label>
+
+              <label className="slider-row">
+                <div className="slider-header">
+                  <span>Proteger o solo</span>
+                  <span className="slider-val">{priorities.improveSoil}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={priorities.improveSoil}
+                  onChange={(e) => updatePriority('improveSoil', Number(e.target.value))}
+                />
+              </label>
+
+              <label className="slider-row">
+                <div className="slider-header">
+                  <span>Conter erosão</span>
+                  <span className="slider-val">{priorities.reduceErosion}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={priorities.reduceErosion}
+                  onChange={(e) => updatePriority('reduceErosion', Number(e.target.value))}
+                />
+              </label>
+            </div>
+          </div>
+        </details>
       </div>
 
       {analysis && (

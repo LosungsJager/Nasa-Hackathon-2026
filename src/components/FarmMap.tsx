@@ -428,18 +428,18 @@ export function FarmMap({
               {isPlaying ? <Pause size={13} /> : <Play size={13} />}
             </button>
             <div className="tt-info">
-              <span className="tt-label">Simulação FAO-56 com POWER diário (2005–2024)</span>
+              <span className="tt-label">Histórico de safras na área (2005–2024)</span>
               <div className="tt-status-row">
                 <strong>Safra {currentPt?.year}</strong>
                 <span className={`tt-pill ${currentPt?.status}`}>
                   {currentPt?.status === 'seca'
                     ? 'Seca'
                     : currentPt?.status === 'excesso'
-                      ? 'Chuva extrema'
-                      : 'Normal'}
+                      ? 'Chuva forte'
+                      : 'Boa'}
                 </span>
                 <span className="tt-yield">
-                  Rend. estimado: {currentPt?.relYieldPct}%
+                  Colheita: {currentPt?.relYieldPct}%
                 </span>
               </div>
             </div>
@@ -449,7 +449,7 @@ export function FarmMap({
                 className="tt-cta-btn"
                 onClick={onOpenCropDashboard}
               >
-                <span>Ver rotações</span>
+                <span>Comparar</span>
                 <ArrowRight size={14} />
               </button>
             )}
@@ -470,19 +470,19 @@ export function FarmMap({
 
       {/* Honest Legend */}
       <div className="map-legend-card">
-        <div className="legend-title">Polígono (simulação da safra)</div>
+        <div className="legend-title">Cor da lavoura no ano</div>
         <div className="legend-stops">
           <div className="legend-stop">
             <span className="legend-swatch" style={{ backgroundColor: '#7ed957' }} />
-            <span>Normal</span>
+            <span>Boa</span>
           </div>
           <div className="legend-stop">
             <span className="legend-swatch" style={{ backgroundColor: '#dc2626' }} />
-            <span>Déficit hídrico</span>
+            <span>Seca</span>
           </div>
           <div className="legend-stop">
             <span className="legend-swatch" style={{ backgroundColor: '#004aad' }} />
-            <span>Chuva extrema</span>
+            <span>Chuva forte</span>
           </div>
         </div>
       </div>

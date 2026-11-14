@@ -203,7 +203,7 @@ export function App() {
             onClick={handleDownloadPdf}
           >
             <FileDown size={15} />
-            <span>Gerar relatório para o agrônomo</span>
+            <span>Baixar relatório (PDF)</span>
           </button>
         </div>
       </header>

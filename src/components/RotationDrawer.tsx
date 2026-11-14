@@ -65,7 +65,16 @@ export function RotationDrawer({
                 <div className="panel-metrics-line">
                   <span>Ano seco: <strong>{sc.backtest.p10YieldPct}%</strong></span>
                   <span>Normal: <strong>{sc.backtest.p50YieldPct}%</strong></span>
-                  <span>Quebra: <strong>{sc.backtest.failureRiskPct}%</strong></span>
+                  <span>
+                    Perda:{' '}
+                    <strong>
+                      {sc.backtest.failureRiskPct <= 10
+                        ? `Baixa (${sc.backtest.failureRiskPct}%)`
+                        : sc.backtest.failureRiskPct <= 25
+                          ? `Média (${sc.backtest.failureRiskPct}%)`
+                          : `Alta (${sc.backtest.failureRiskPct}%)`}
+                    </strong>
+                  </span>
                 </div>
 
                 <div className="panel-bars-compact">
