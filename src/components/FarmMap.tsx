@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { BacktestYearPoint, FarmAnalysis, GibsLayerId, NasaBasemapId } from '../types/agro';
-import { ArrowRight, Check, Pause, Pencil, Play, Trash2 } from 'lucide-react';
+import { ArrowRight, Check, ExternalLink, Pause, Pencil, Play, Trash2 } from 'lucide-react';
 
 interface FarmMapProps {
   center: [number, number];
@@ -128,6 +128,7 @@ export function FarmMap({
       zoomControl: false,
     });
 
+    map.attributionControl.setPrefix('NASA POWER & GIBS');
     L.control.zoom({ position: 'topright' }).addTo(map);
 
     // NASA GIBS Reference Features & Labels (coastlines, borders, place names)
@@ -342,6 +343,17 @@ export function FarmMap({
                 <Trash2 size={15} />
               </button>
             )}
+            <a
+              href="https://power.larc.nasa.gov/data-access-viewer/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="map-tool-btn"
+              title="Abrir NASA POWER Data Access Viewer oficial (bloqueado em iframe por X-Frame-Options: DENY)"
+              style={{ textDecoration: 'none' }}
+            >
+              <ExternalLink size={14} />
+              <span>POWER Viewer</span>
+            </a>
           </>
         ) : (
           <div className="draw-active-pill">
