@@ -1,26 +1,26 @@
 :root {
-  --bg-shell: #eef2ef;
+  --bg-shell: #f1f4f8;
   --bg-surface: #ffffff;
-  --bg-subtle: #f4f7f5;
-  --bg-header: #10261b;
-  --border-subtle: #dce4df;
-  --border-strong: #c2d0c7;
+  --bg-subtle: #f5f8fc;
+  --bg-header: #004aad;
+  --border-subtle: #d5dfec;
+  --border-strong: #b8c7dc;
 
-  --text-primary: #14241b;
-  --text-secondary: #475b50;
-  --text-muted: #6c7f74;
+  --text-primary: #0f1f38;
+  --text-secondary: #3e506b;
+  --text-muted: #63758f;
 
-  --accent-green: #15803d;
-  --accent-green-hover: #166534;
-  --accent-emerald: #10b981;
-  --accent-water: #2563eb;
+  --accent-green: #004aad;
+  --accent-green-hover: #003885;
+  --accent-emerald: #7ed957;
+  --accent-water: #004aad;
   --accent-yield: #d97706;
-  --accent-soil: #16a34a;
+  --accent-soil: #7ed957;
 
-  --shadow-sm: 0 2px 6px rgba(16, 38, 27, 0.06);
-  --shadow-md: 0 8px 24px rgba(16, 38, 27, 0.12);
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  --shadow-sm: 0 1px 2px rgba(0, 38, 89, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 38, 89, 0.12);
+  --radius-md: 4px;
+  --radius-lg: 5px;
 }
 
 *,
@@ -71,7 +71,7 @@ body,
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 2px solid #7ed957;
   z-index: 30;
 }
 
@@ -85,11 +85,11 @@ body,
   width: 32px;
   height: 32px;
   border-radius: 4px;
-  background: #15803d;
+  background: #7ed957;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
+  color: #002659;
 }
 
 .brand-group h1 {
@@ -111,11 +111,11 @@ body,
   display: flex;
   align-items: center;
   gap: 7px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 4px;
   padding: 5px 10px;
-  color: #e2f1e8;
+  color: #ffffff;
 }
 
 .preset-picker select {
@@ -137,19 +137,19 @@ body,
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  background: #15803d;
-  color: #ffffff;
-  border: 1px solid #16a34a;
+  background: #7ed957;
+  color: #002659;
+  border: 1px solid #6bc445;
   border-radius: 4px;
   padding: 7px 12px;
   font-size: 0.82rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: background 0.15s ease;
 }
 
 .pdf-btn:hover:not(:disabled) {
-  background: #166534;
+  background: #6bc445;
 }
 
 .pdf-btn:disabled {
@@ -292,9 +292,9 @@ body,
 }
 
 .layer-btn.active {
-  background: #ecfdf5;
+  background: #eef4fc;
   border-color: var(--accent-green);
-  color: #064e3b;
+  color: #003885;
 }
 
 .layer-btn-text {
@@ -339,8 +339,8 @@ body,
 }
 
 .source-badge.live-power {
-  background: #dcfce7;
-  color: #166534;
+  background: #e6f7de;
+  color: #003885;
 }
 
 .source-badge.hybrid-cache {
@@ -475,7 +475,7 @@ body,
   display: flex;
   align-items: center;
   gap: 10px;
-  background: rgba(16, 38, 27, 0.92);
+  background: rgba(0, 74, 173, 0.92);
   color: #ffffff;
   padding: 7px 12px;
   border-radius: 4px;
@@ -525,7 +525,7 @@ body,
 .rotation-drawer {
   background: var(--bg-surface);
   border-top: 1px solid var(--border-strong);
-  box-shadow: 0 -6px 24px rgba(16, 38, 27, 0.1);
+  box-shadow: 0 -6px 24px rgba(0, 74, 173, 0.1);
   z-index: 25;
   display: flex;
   flex-direction: column;
@@ -611,7 +611,7 @@ body,
 
 .scenario-card.recommended {
   border: 1.5px solid var(--accent-green);
-  background: #fafdfb;
+  background: #f7faff;
 }
 
 .scenario-header {
@@ -643,8 +643,8 @@ body,
 }
 
 .scenario-icon.cover-legume {
-  background: #dcfce7;
-  color: #15803d;
+  background: #e6f7de;
+  color: #004aad;
 }
 
 .scenario-icon.drought-tolerant {
@@ -675,8 +675,8 @@ body,
   gap: 3px;
   font-size: 0.68rem;
   font-weight: 700;
-  color: #166534;
-  background: #dcfce7;
+  color: #003885;
+  background: #e6f7de;
   padding: 1px 7px;
   border-radius: 4px;
 }
@@ -881,7 +881,7 @@ body,
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: #b9d3c4;
+  color: #dbeafe;
   font-size: 0.81rem;
   font-weight: 600;
   cursor: pointer;
@@ -894,8 +894,8 @@ body,
 }
 
 .view-tab.active {
-  background: #10b981;
-  color: #062818;
+  background: #7ed957;
+  color: #002659;
 }
 
 /* Scrollable Stage for Crop Dashboard & Methodology */
@@ -912,7 +912,7 @@ body,
   bottom: 14px;
   left: 14px;
   z-index: 450;
-  background: rgba(16, 38, 27, 0.92);
+  background: rgba(0, 74, 173, 0.92);
   color: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 4px;
@@ -934,8 +934,8 @@ body,
   height: 28px;
   border-radius: 4px;
   border: none;
-  background: #10b981;
-  color: #062818;
+  background: #7ed957;
+  color: #002659;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -982,7 +982,7 @@ body,
 }
 
 .tt-pill.normal {
-  background: #15803d;
+  background: #004aad;
   color: #ffffff;
 }
 
@@ -1012,7 +1012,7 @@ body,
 
 .tt-slider {
   width: 100%;
-  accent-color: #10b981;
+  accent-color: #7ed957;
   cursor: pointer;
 }
 
@@ -1079,8 +1079,8 @@ body,
 }
 
 .conf-pill.alta {
-  background: #dcfce7;
-  color: #166534;
+  background: #e6f7de;
+  color: #003885;
 }
 
 .conf-pill.média {
@@ -1189,7 +1189,7 @@ body,
 }
 
 .ndvi-bar-fill.vegetated {
-  background: #16a34a;
+  background: #7ed957;
 }
 
 .ndvi-bar-fill.bare {
@@ -1273,7 +1273,7 @@ body,
 
 .dash-scenario-card.recommended {
   border: 1.5px solid var(--accent-green);
-  background: #fafdfb;
+  background: #f7faff;
 }
 
 /* P10 / P50 / P90 Backtest Box */
@@ -1302,8 +1302,8 @@ body,
 }
 
 .failure-badge.low {
-  background: #dcfce7;
-  color: #166534;
+  background: #e6f7de;
+  color: #003885;
 }
 
 .failure-badge.med {
@@ -1328,7 +1328,7 @@ body,
   position: absolute;
   top: 0;
   height: 100%;
-  background: #86efac;
+  background: #7ed957;
   border-radius: 4px;
 }
 
@@ -1339,7 +1339,7 @@ body,
   height: 12px;
   transform: translateX(-50%);
   border-radius: 50%;
-  background: #15803d;
+  background: #004aad;
   border: 2px solid #ffffff;
 }
 
@@ -1403,8 +1403,8 @@ body,
 }
 
 .card-tab-btn.active {
-  background: #ecfdf5;
-  color: #166534;
+  background: #eef4fc;
+  color: #003885;
 }
 
 .card-tab-panel {
@@ -1488,8 +1488,8 @@ body,
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  background: #ecfdf5;
-  color: #065f46;
+  background: #eef4fc;
+  color: #004aad;
   padding: 6px 12px;
   border-radius: 4px;
   font-size: 0.8rem;
@@ -1533,8 +1533,8 @@ body,
 }
 
 .scope-badge.farm {
-  background: #dcfce7;
-  color: #166534;
+  background: #e6f7de;
+  color: #003885;
 }
 
 .scope-badge.regional {

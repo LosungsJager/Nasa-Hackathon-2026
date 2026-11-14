@@ -17,7 +17,7 @@ export function generateAgronomistPdf(
   const cropName = CROPS_CATALOG[currentCrop].name;
 
   // Header Banner
-  doc.setFillColor(20, 66, 46);
+  doc.setFillColor(0, 74, 173);
   doc.rect(0, 0, pageWidth, 28, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
