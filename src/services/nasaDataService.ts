@@ -13,6 +13,9 @@ interface PowerDailyResponse {
     parameter?: {
       T2M?: Record<string, number>;
       T2M_MIN?: Record<string, number>;
+      T2M_MAX?: Record<string, number>;
+      RH2M?: Record<string, number>;
+      WS2M?: Record<string, number>;
       PRECTOTCORR?: Record<string, number>;
       ALLSKY_SFC_SW_DWN?: Record<string, number>;
     };
@@ -29,10 +32,9 @@ function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
 
-function estimateDailyEt0(t2m: number, tMin: number, solarMjM2Day: number): number {
-  // Hargreaves / radiation-based daily ET0 approximation (mm/day)
+function estimateDailyEt0(t2m: number, tMin: number, tMax: number, solarMjM2Day: number): number {
   const rad = solarMjM2Day > 0 && solarMjM2Day < 45 ? solarMjM2Day : 16.5;
-  const dT = Math.max(2, (t2m - tMin) * 2);
+  const dT = Math.max(2, tMax - tMin);
   const et0 = 0.0023 * (t2m + 17.8) * Math.sqrt(dT) * (rad * 0.408) * 0.48;
   return Number(clamp(et0, 0.8, 9.5).toFixed(2));
 }
@@ -42,10 +44,10 @@ async function fetchNasaPowerDaily(
   lng: number
 ): Promise<{ source: 'live-daily' | 'offline-fallback'; days: DailyClimateDay[] }> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 9000);
+  const timeoutId = setTimeout(() => controller.abort(), 9500);
 
   try {
-    const url = `https://power.larc.nasa.gov/api/temporal/daily/point?parameters=T2M,T2M_MIN,PRECTOTCORR,ALLSKY_SFC_SW_DWN&community=AG&longitude=${lng.toFixed(
+    const url = `https://power.larc.nasa.gov/api/temporal/daily/point?parameters=T2M,T2M_MIN,T2M_MAX,PRECTOTCORR,ALLSKY_SFC_SW_DWN,RH2M,WS2M&community=AG&longitude=${lng.toFixed(
       4
     )}&latitude=${lat.toFixed(4)}&start=20050101&end=20241231&format=JSON`;
 
@@ -61,22 +63,30 @@ async function fetchNasaPowerDaily(
     for (const date of Object.keys(p.T2M)) {
       const t2m = p.T2M[date];
       const tMin = p.T2M_MIN?.[date] ?? t2m - 4;
+      const tMax = p.T2M_MAX?.[date] ?? t2m + 5;
+      const rh2m = p.RH2M?.[date] ?? 70;
+      const ws2m = p.WS2M?.[date] ?? 2.2;
       const precip = p.PRECTOTCORR[date];
       const solar = p.ALLSKY_SFC_SW_DWN?.[date] ?? 16.5;
 
-      // Filter NASA POWER fill values (-999)
       if (t2m < -80 || precip < 0) continue;
 
+      const safeMin = tMin > -80 ? tMin : t2m - 4;
+      const safeMax = tMax > -80 ? tMax : t2m + 5;
       const year = Number(date.slice(0, 4));
       const month = Number(date.slice(4, 6));
+
       days.push({
         date,
         year,
         month,
         t2m,
-        t2mMin: tMin > -80 ? tMin : t2m - 4,
+        t2mMin: safeMin,
+        t2mMax: safeMax,
+        rh2m: rh2m > 0 && rh2m <= 100 ? rh2m : 70,
+        ws2m: ws2m >= 0 && ws2m < 40 ? ws2m : 2.2,
         precipMm: precip,
-        et0Mm: estimateDailyEt0(t2m, tMin > -80 ? tMin : t2m - 4, solar),
+        et0Mm: estimateDailyEt0(t2m, safeMin, safeMax, solar),
       });
     }
 
@@ -84,7 +94,6 @@ async function fetchNasaPowerDaily(
     return { source: 'live-daily', days };
   } catch {
     clearTimeout(timeoutId);
-    // Honest offline fallback (explicitly labeled as offline-fallback in UI)
     const absLat = Math.abs(lat);
     const baseTemp = clamp(28 - absLat * 0.32, 11, 28);
     const baseRainPerDay = absLat < 15 ? 4.8 : absLat > 35 ? 2.4 : 4.2;
@@ -96,6 +105,7 @@ async function fetchNasaPowerDaily(
           const seasonal = Math.sin(((m - 1) / 12) * Math.PI * 2) * (lat < 0 ? 4.5 : -4.5);
           const t2m = Number((baseTemp + seasonal).toFixed(1));
           const tMin = Number((t2m - 5.5).toFixed(1));
+          const tMax = Number((t2m + 6.0).toFixed(1));
           const precipMm = d % 4 === 0 ? Number((baseRainPerDay * 3.8).toFixed(1)) : 0;
           days.push({
             date: `${y}${String(m).padStart(2, '0')}${String(d).padStart(2, '0')}`,
@@ -103,8 +113,11 @@ async function fetchNasaPowerDaily(
             month: m,
             t2m,
             t2mMin: tMin,
+            t2mMax: tMax,
+            rh2m: 72,
+            ws2m: 2.1,
             precipMm,
-            et0Mm: estimateDailyEt0(t2m, tMin, 16),
+            et0Mm: estimateDailyEt0(t2m, tMin, tMax, 16),
           });
         }
       }
@@ -167,10 +180,11 @@ export async function analyzeFarmPolygon(
   const [centLng, centLat] = centroidFeat.geometry.coordinates;
   const bbox = turf.bbox(polygonGeoJson) as [number, number, number, number];
 
-  const [powerRes, soil, smapCmr, ecoCmr, srtmCmr] = await Promise.all([
+  const [powerRes, soil, smapL4Cmr, smapL3Cmr, ecoCmr, srtmCmr] = await Promise.all([
     fetchNasaPowerDaily(centLat, centLng),
     Promise.resolve<LocalSoilProfile>(resolveLocalSoil(centLat, centLng)),
     queryCmrGranule('SMAP L4 Zona Radicular', 'SPL4SMGP', bbox),
+    queryCmrGranule('SMAP L3 Superficial 9km', 'SPL3SMP_E', bbox),
     queryCmrGranule('ECOSTRESS LST 70m', 'ECO_L2T_LSTE', bbox),
     queryCmrGranule('SRTM Elevação 30m', 'SRTMGL1', bbox),
   ]);
@@ -179,22 +193,27 @@ export async function analyzeFarmPolygon(
   const yearsCount = Math.max(1, new Set(days.map((d) => d.year)).size);
 
   const totalTemp = days.reduce((s, d) => s + d.t2m, 0);
+  const totalRh = days.reduce((s, d) => s + d.rh2m, 0);
   const totalPrecip = days.reduce((s, d) => s + d.precipMm, 0);
   const totalEt0 = days.reduce((s, d) => s + d.et0Mm, 0);
 
   const annualAvgTempC = Number((totalTemp / days.length).toFixed(1));
+  const meanRh2mPct = Math.round(totalRh / days.length);
   const annualMeanPrecipMm = Math.round(totalPrecip / yearsCount);
   const meanEt0MmDay = Number((totalEt0 / days.length).toFixed(2));
 
-  // Real frost days count (T2M_MIN <= 2.0 °C)
-  const frostTotal = days.filter((d) => d.t2mMin <= 2.0).length;
-  const frostDaysPerYear = Number((frostTotal / yearsCount).toFixed(1));
+  const frostDaysPerYear = Number(
+    (days.filter((d) => d.t2mMin <= 2.0).length / yearsCount).toFixed(1)
+  );
+  const heatStressDaysPerYear = Number(
+    (days.filter((d) => d.t2mMax >= 32.0).length / yearsCount).toFixed(1)
+  );
 
-  // Real P95 extreme rain threshold from rainy days (> 1 mm)
   const rainyDays = days.filter((d) => d.precipMm > 1).map((d) => d.precipMm).sort((a, b) => a - b);
   const p95Threshold = rainyDays.length > 0 ? rainyDays[Math.floor(rainyDays.length * 0.95)] : 35;
-  const extremeTotal = days.filter((d) => d.precipMm >= p95Threshold).length;
-  const extremeRainDaysPerYear = Number((extremeTotal / yearsCount).toFixed(1));
+  const extremeRainDaysPerYear = Number(
+    (days.filter((d) => d.precipMm >= p95Threshold).length / yearsCount).toFixed(1)
+  );
 
   const seasonEt0 = meanEt0MmDay * 120;
   const seasonPrecip = annualMeanPrecipMm * 0.42;
@@ -211,14 +230,16 @@ export async function analyzeFarmPolygon(
     powerPeriod: '2005–2024 (série diária)',
     annualAvgTempC,
     annualMeanPrecipMm,
+    meanRh2mPct,
     meanEt0MmDay,
     frostDaysPerYear,
+    heatStressDaysPerYear,
     extremeRainDaysPerYear,
     seasonalWaterDeficitMm,
     estimatedErosionIndex,
     erosionLevel:
       estimatedErosionIndex >= 60 ? 'Alto' : estimatedErosionIndex >= 35 ? 'Moderado' : 'Baixo',
-    cmrGranules: [smapCmr, ecoCmr, srtmCmr],
+    cmrGranules: [smapL4Cmr, smapL3Cmr, ecoCmr, srtmCmr],
   };
 
   return {

@@ -18,6 +18,7 @@ import type {
   FarmerConstraints,
   FarmerPriorities,
   GibsLayerId,
+  NasaBasemapId,
 } from './types/agro';
 
 export function App() {
@@ -48,6 +49,7 @@ export function App() {
     tempDeltaC: 0,
   });
 
+  const [nasaBasemap, setNasaBasemap] = useState<NasaBasemapId>('viirs_truecolor');
   const [gibsLayer, setGibsLayer] = useState<GibsLayerId>('modis_ndvi');
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
 
@@ -216,6 +218,11 @@ export function App() {
           onPrioritiesChange={setPriorities}
           constraints={constraints}
           onConstraintsChange={setConstraints}
+          basemap={nasaBasemap}
+          onBasemapChange={(b) => {
+            setNasaBasemap(b);
+            setViewMode('map');
+          }}
           gibsLayer={gibsLayer}
           onGibsLayerChange={(layer) => {
             setGibsLayer(layer);
@@ -232,6 +239,7 @@ export function App() {
                   center={mapCenter}
                   zoom={mapZoom}
                   analysis={analysis}
+                  basemap={nasaBasemap}
                   gibsLayer={gibsLayer}
                   isDrawing={isDrawing}
                   onStartDrawing={() => setIsDrawing(true)}
@@ -247,13 +255,13 @@ export function App() {
                     <div className="ind-cell measured">
                       <span className="ind-tag medido">MEDIDO • POWER</span>
                       <strong>
-                        {analysis.indicators.annualAvgTempC}°C • {analysis.indicators.annualMeanPrecipMm} mm/ano
+                        {analysis.indicators.annualAvgTempC}°C • {analysis.indicators.annualMeanPrecipMm} mm/ano • UR {analysis.indicators.meanRh2mPct}%
                       </strong>
                     </div>
                     <div className="ind-cell measured">
                       <span className="ind-tag medido">MEDIDO • EXTREMOS</span>
                       <strong>
-                        Geada: {analysis.indicators.frostDaysPerYear}d • Chuva P95: {analysis.indicators.extremeRainDaysPerYear}d
+                        Geada: {analysis.indicators.frostDaysPerYear}d • Calor ≥32°C: {analysis.indicators.heatStressDaysPerYear}d • P95: {analysis.indicators.extremeRainDaysPerYear}d
                       </strong>
                     </div>
                     <div className="ind-cell estimated">

@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { BacktestYearPoint, FarmAnalysis, GibsLayerId } from '../types/agro';
+import type { BacktestYearPoint, FarmAnalysis, GibsLayerId, NasaBasemapId } from '../types/agro';
 import { ArrowRight, Check, Pause, Pencil, Play, Trash2 } from 'lucide-react';
 
 interface FarmMapProps {
   center: [number, number];
   zoom: number;
   analysis: FarmAnalysis | null;
+  basemap: NasaBasemapId;
   gibsLayer: GibsLayerId;
   isDrawing: boolean;
   onStartDrawing: () => void;
@@ -21,11 +22,37 @@ interface FarmMapProps {
 function getRecentGibsDate(): string {
   // 16 days ago ensures GIBS 8-day/L4 products are finalized and available
   const d = new Date(Date.now() - 16 * 86400000);
-  // Cap to 2026-10-15 or earlier if clock is ahead
   const yyyy = d.getUTCFullYear();
   const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(d.getUTCDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
+}
+
+function getBasemapTileConfig(basemap: NasaBasemapId): {
+  url: string;
+  maxNativeZoom: number;
+  attribution: string;
+} {
+  const dateStr = getRecentGibsDate();
+  if (basemap === 'modis_truecolor') {
+    return {
+      url: `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${dateStr}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
+      maxNativeZoom: 9,
+      attribution: 'NASA GIBS (MODIS Terra True Color)',
+    };
+  }
+  if (basemap === 'bluemarble') {
+    return {
+      url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_NextGeneration/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg',
+      maxNativeZoom: 8,
+      attribution: 'NASA GIBS (Blue Marble Next Generation)',
+    };
+  }
+  return {
+    url: `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/${dateStr}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
+    maxNativeZoom: 9,
+    attribution: 'NASA GIBS (VIIRS SNPP True Color)',
+  };
 }
 
 function getGibsTileUrl(layer: GibsLayerId): string | null {
@@ -53,6 +80,7 @@ export function FarmMap({
   center,
   zoom,
   analysis,
+  basemap,
   gibsLayer,
   isDrawing,
   onStartDrawing,
@@ -66,6 +94,7 @@ export function FarmMap({
   const mapRef = useRef<L.Map | null>(null);
   const polyLayerRef = useRef<L.LayerGroup | null>(null);
   const drawLayerRef = useRef<L.LayerGroup | null>(null);
+  const basemapTileRef = useRef<L.TileLayer | null>(null);
   const gibsTileRef = useRef<L.TileLayer | null>(null);
 
   const [draftPoints, setDraftPoints] = useState<[number, number][]>([]);
@@ -95,24 +124,30 @@ export function FarmMap({
     const map = L.map(containerRef.current, {
       center,
       zoom,
+      maxZoom: 14,
       zoomControl: false,
     });
 
     L.control.zoom({ position: 'topright' }).addTo(map);
 
+    // NASA GIBS Reference Features & Labels (coastlines, borders, place names)
     L.tileLayer(
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Features_15m/default/GoogleMapsCompatible_Level9/{z}/{y}/{x}.png',
       {
-        attribution: 'Esri World Imagery | NASA POWER & GIBS',
-        maxZoom: 18,
+        maxNativeZoom: 9,
+        maxZoom: 14,
+        opacity: 0.7,
+        zIndex: 20,
       }
     ).addTo(map);
 
     L.tileLayer(
-      'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Labels_15m/default/GoogleMapsCompatible_Level9/{z}/{y}/{x}.png',
       {
-        maxZoom: 18,
-        opacity: 0.75,
+        maxNativeZoom: 9,
+        maxZoom: 14,
+        opacity: 0.85,
+        zIndex: 21,
       }
     ).addTo(map);
 
@@ -126,12 +161,31 @@ export function FarmMap({
     };
   }, []);
 
+  // Update NASA GIBS Basemap
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (basemapTileRef.current) {
+      map.removeLayer(basemapTileRef.current);
+      basemapTileRef.current = null;
+    }
+
+    const cfg = getBasemapTileConfig(basemap);
+    basemapTileRef.current = L.tileLayer(cfg.url, {
+      maxNativeZoom: cfg.maxNativeZoom,
+      maxZoom: 14,
+      attribution: cfg.attribution,
+      zIndex: 1,
+    }).addTo(map);
+  }, [basemap]);
+
   useEffect(() => {
     if (!mapRef.current) return;
-    mapRef.current.flyTo(center, zoom, { duration: 0.8 });
+    mapRef.current.flyTo(center, Math.min(zoom, 14), { duration: 0.8 });
   }, [center, zoom]);
 
-  // Update live NASA GIBS tile layer
+  // Update live NASA GIBS science overlay tile layer
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -145,10 +199,11 @@ export function FarmMap({
     if (url) {
       const maxNativeZoom = gibsLayer === 'modis_ndvi' ? 9 : 6;
       gibsTileRef.current = L.tileLayer(url, {
-        opacity: 0.58,
+        opacity: 0.62,
         maxNativeZoom,
-        maxZoom: 18,
-        attribution: 'NASA GIBS',
+        maxZoom: 14,
+        attribution: 'NASA GIBS | NASA POWER & CMR',
+        zIndex: 10,
       }).addTo(map);
     }
   }, [gibsLayer]);

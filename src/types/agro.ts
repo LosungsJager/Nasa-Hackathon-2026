@@ -1,5 +1,7 @@
 export type GibsLayerId = 'none' | 'modis_ndvi' | 'smap_l4' | 'gpm_imerg';
 
+export type NasaBasemapId = 'viirs_truecolor' | 'modis_truecolor' | 'bluemarble';
+
 export type AppViewMode = 'map' | 'crops' | 'methodology';
 
 export type DataProvenance = 'medido' | 'derivado' | 'premissa';
@@ -54,6 +56,9 @@ export interface DailyClimateDay {
   month: number;
   t2m: number;
   t2mMin: number;
+  t2mMax: number;
+  rh2m: number;
+  ws2m: number;
   precipMm: number;
   et0Mm: number;
 }
@@ -85,10 +90,12 @@ export interface LocalSoilProfile {
 export interface FieldIndicators {
   powerSource: 'live-daily' | 'offline-fallback';
   powerPeriod: string;
-  annualAvgTempC: number;        // Medido (NASA POWER)
-  annualMeanPrecipMm: number;    // Medido (NASA POWER)
-  meanEt0MmDay: number;          // Derivado (Hargreaves/POWER T2M+Radiação)
+  annualAvgTempC: number;        // Medido (NASA POWER T2M)
+  annualMeanPrecipMm: number;    // Medido (NASA POWER PRECTOTCORR)
+  meanRh2mPct: number;           // Medido (NASA POWER RH2M)
+  meanEt0MmDay: number;          // Derivado (Hargreaves/POWER)
   frostDaysPerYear: number;      // Medido (POWER T2M_MIN <= 2°C)
+  heatStressDaysPerYear: number; // Medido (POWER T2M_MAX >= 32°C)
   extremeRainDaysPerYear: number;// Medido (POWER PRECTOTCORR >= P95)
   seasonalWaterDeficitMm: number;// Derivado (balanço hídrico)
   estimatedErosionIndex: number; // Derivado (chuva POWER + declividade/solo)

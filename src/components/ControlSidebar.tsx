@@ -1,4 +1,4 @@
-import { CheckSquare, Layers, Leaf, Sliders } from 'lucide-react';
+import { CheckSquare, Globe, Layers, Leaf, Sliders } from 'lucide-react';
 import type {
   CropId,
   CropInfo,
@@ -6,6 +6,7 @@ import type {
   FarmerConstraints,
   FarmerPriorities,
   GibsLayerId,
+  NasaBasemapId,
 } from '../types/agro';
 
 interface ControlSidebarProps {
@@ -16,13 +17,21 @@ interface ControlSidebarProps {
   onPrioritiesChange: (next: FarmerPriorities) => void;
   constraints: FarmerConstraints;
   onConstraintsChange: (next: FarmerConstraints) => void;
+  basemap: NasaBasemapId;
+  onBasemapChange: (basemap: NasaBasemapId) => void;
   gibsLayer: GibsLayerId;
   onGibsLayerChange: (layer: GibsLayerId) => void;
   analysis: FarmAnalysis | null;
 }
 
+const NASA_BASEMAP_OPTIONS: { id: NasaBasemapId; label: string; scale: string }[] = [
+  { id: 'viirs_truecolor', label: 'VIIRS True Color', scale: '375 m' },
+  { id: 'modis_truecolor', label: 'MODIS True Color', scale: '250 m' },
+  { id: 'bluemarble', label: 'Blue Marble NASA', scale: '500 m' },
+];
+
 const GIBS_OPTIONS: { id: GibsLayerId; label: string; scale: string }[] = [
-  { id: 'none', label: 'Apenas imagem base', scale: 'Esri' },
+  { id: 'none', label: 'Sem sobreposição', scale: 'Base NASA' },
   { id: 'modis_ndvi', label: 'MODIS NDVI (8d)', scale: '250 m' },
   { id: 'smap_l4', label: 'SMAP L4 Umidade', scale: '9 km' },
   { id: 'gpm_imerg', label: 'GPM IMERG Chuva', scale: '10 km' },
@@ -36,6 +45,8 @@ export function ControlSidebar({
   onPrioritiesChange,
   constraints,
   onConstraintsChange,
+  basemap,
+  onBasemapChange,
   gibsLayer,
   onGibsLayerChange,
   analysis,
@@ -179,8 +190,28 @@ export function ControlSidebar({
 
       <div className="sidebar-section">
         <div className="section-title">
+          <Globe size={13} />
+          <span>Mapa Base NASA (GIBS)</span>
+        </div>
+        <div className="layer-buttons-list">
+          {NASA_BASEMAP_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              className={`layer-row-btn ${basemap === opt.id ? 'active' : ''}`}
+              onClick={() => onBasemapChange(opt.id)}
+            >
+              <span>{opt.label}</span>
+              <small>{opt.scale}</small>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="sidebar-section">
+        <div className="section-title">
           <Layers size={13} />
-          <span>Camada NASA GIBS</span>
+          <span>Sobreposição NASA GIBS</span>
         </div>
         <div className="layer-buttons-list">
           {GIBS_OPTIONS.map((opt) => (
