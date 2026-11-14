@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FileDown, MapPin, Sprout } from 'lucide-react';
+import { BookOpen, FileDown, LayoutGrid, Map as MapIcon, MapPin, Sprout } from 'lucide-react';
 import { REGION_PRESETS } from './data/localAgroData';
 import { analyzeFarmPolygon } from './services/nasaDataService';
 import { evaluateRotationScenarios } from './engine/rotationEngine';
@@ -7,14 +7,19 @@ import { generateAgronomistPdf } from './utils/pdfReport';
 import { ControlSidebar } from './components/ControlSidebar';
 import { FarmMap } from './components/FarmMap';
 import { RotationDrawer } from './components/RotationDrawer';
+import { CropDashboard } from './components/CropDashboard';
+import { MethodologyView } from './components/MethodologyView';
 import type {
   ActiveLayer,
+  AppViewMode,
+  ClimateStressScenario,
   CropId,
   FarmAnalysis,
   FarmerPriorities,
 } from './types/agro';
 
 export function App() {
+  const [viewMode, setViewMode] = useState<AppViewMode>('crops');
   const [selectedPresetId, setSelectedPresetId] = useState<string>(REGION_PRESETS[0].id);
   const [mapCenter, setMapCenter] = useState<[number, number]>(REGION_PRESETS[0].center);
   const [mapZoom, setMapZoom] = useState<number>(REGION_PRESETS[0].zoom);
@@ -25,6 +30,10 @@ export function App() {
     moreIncome: 65,
     improveSoil: 80,
     reduceErosion: 60,
+  });
+  const [climateStress, setClimateStress] = useState<ClimateStressScenario>({
+    rainDeltaPct: 0,
+    tempDeltaC: 0,
   });
 
   const [activeLayer, setActiveLayer] = useState<ActiveLayer>('moisture');
@@ -44,7 +53,6 @@ export function App() {
     }
   }, []);
 
-  // Load initial demo farm on mount
   useEffect(() => {
     runAnalysis(REGION_PRESETS[0].polygonCoords);
   }, [runAnalysis]);
@@ -70,8 +78,8 @@ export function App() {
 
   const scenarios = useMemo(() => {
     if (!analysis) return [];
-    return evaluateRotationScenarios(analysis, currentCrop, priorities);
-  }, [analysis, currentCrop, priorities]);
+    return evaluateRotationScenarios(analysis, currentCrop, priorities, climateStress);
+  }, [analysis, currentCrop, priorities, climateStress]);
 
   const handleDownloadPdf = () => {
     if (!analysis || scenarios.length === 0) return;
@@ -89,10 +97,41 @@ export function App() {
           <div>
             <h1>Field Shift</h1>
             <span className="brand-sub">
-              Rotação de Cultivos • NASA Space Apps 2026
+              O Seguro-Clima da Rotação • NASA Space Apps 2026
             </span>
           </div>
         </div>
+
+        {/* Intuitive View Switcher */}
+        <nav className="view-switcher" aria-label="Navegação principal">
+          <button
+            type="button"
+            id="tab-map"
+            className={`view-tab ${viewMode === 'map' ? 'active' : ''}`}
+            onClick={() => setViewMode('map')}
+          >
+            <MapIcon size={15} />
+            <span>Mapa & Talhão</span>
+          </button>
+          <button
+            type="button"
+            id="tab-crops"
+            className={`view-tab ${viewMode === 'crops' ? 'active' : ''}`}
+            onClick={() => setViewMode('crops')}
+          >
+            <LayoutGrid size={15} />
+            <span>Dashboard de Culturas</span>
+          </button>
+          <button
+            type="button"
+            id="tab-methodology"
+            className={`view-tab ${viewMode === 'methodology' ? 'active' : ''}`}
+            onClick={() => setViewMode('methodology')}
+          >
+            <BookOpen size={15} />
+            <span>Dados & Metodologia</span>
+          </button>
+        </nav>
 
         <div className="top-actions">
           <div className="preset-picker">
@@ -121,7 +160,7 @@ export function App() {
             onClick={handleDownloadPdf}
           >
             <FileDown size={16} />
-            <span>Download PDF (Agrônomo)</span>
+            <span>Download PDF</span>
           </button>
         </div>
       </header>
@@ -134,31 +173,60 @@ export function App() {
           priorities={priorities}
           onPrioritiesChange={setPriorities}
           activeLayer={activeLayer}
-          onLayerChange={setActiveLayer}
+          onLayerChange={(layer) => {
+            setActiveLayer(layer);
+            setViewMode('map');
+          }}
           showGibsOverlay={showGibsOverlay}
           onToggleGibsOverlay={() => setShowGibsOverlay((v) => !v)}
           analysis={analysis}
         />
 
         <main className="map-stage">
-          <FarmMap
-            center={mapCenter}
-            zoom={mapZoom}
-            analysis={analysis}
-            activeLayer={activeLayer}
-            showGibsOverlay={showGibsOverlay}
-            isDrawing={isDrawing}
-            onStartDrawing={() => setIsDrawing(true)}
-            onCancelDrawing={() => setIsDrawing(false)}
-            onPolygonComplete={handlePolygonComplete}
-            onClearPolygon={() => setAnalysis(null)}
-          />
+          {viewMode === 'map' && (
+            <>
+              <FarmMap
+                center={mapCenter}
+                zoom={mapZoom}
+                analysis={analysis}
+                activeLayer={activeLayer}
+                showGibsOverlay={showGibsOverlay}
+                isDrawing={isDrawing}
+                onStartDrawing={() => setIsDrawing(true)}
+                onCancelDrawing={() => setIsDrawing(false)}
+                onPolygonComplete={handlePolygonComplete}
+                onClearPolygon={() => setAnalysis(null)}
+                backtestSeries={scenarios[0]?.backtest.yearlySeries ?? []}
+                onOpenCropDashboard={() => setViewMode('crops')}
+              />
 
-          <RotationDrawer
-            scenarios={scenarios}
-            areaHa={analysis?.areaHa ?? null}
-            isLoading={isLoading}
-          />
+              <RotationDrawer
+                scenarios={scenarios}
+                areaHa={analysis?.areaHa ?? null}
+                isLoading={isLoading}
+              />
+            </>
+          )}
+
+          {viewMode === 'crops' && (
+            <div className="stage-scroll">
+              <CropDashboard
+                analysis={analysis}
+                currentCrop={currentCrop}
+                onCropChange={setCurrentCrop}
+                climateStress={climateStress}
+                onClimateStressChange={setClimateStress}
+                scenarios={scenarios}
+                isLoading={isLoading}
+              />
+            </div>
+          )}
+
+          {viewMode === 'methodology' && (
+            <div className="stage-scroll">
+              <MethodologyView analysis={analysis} />
+            </div>
+          )}
         </main>
       </div>
     </div>

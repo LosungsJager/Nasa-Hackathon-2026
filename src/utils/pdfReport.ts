@@ -194,7 +194,7 @@ export function generateAgronomistPdf(
       y = 18;
     }
 
-    const boxH = 33;
+    const boxH = 38;
     doc.setDrawColor(sc.recommended ? 22 : 205, sc.recommended ? 163 : 215, sc.recommended ? 74 : 210);
     doc.setFillColor(sc.recommended ? 242 : 252, sc.recommended ? 250 : 253, sc.recommended ? 245 : 252);
     doc.roundedRect(margin, y, contentWidth, boxH, 2, 2, 'FD');
@@ -202,21 +202,30 @@ export function generateAgronomistPdf(
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9.5);
     doc.setTextColor(20, 45, 30);
-    const titleLine = `${sc.title} (${sc.subtitle}) — Score Geral: ${sc.scores.overall}/100${
+    const titleLine = `${sc.title} (${sc.subtitle}) — Score: ${sc.scores.overall}/100${
       sc.recommended ? ' [RECOMENDADO]' : ''
     }`;
     doc.text(titleLine, margin + 3.5, y + 6);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(21, 101, 52);
+    doc.text(
+      `Backtest 20 safras: P10=${sc.backtest.p10YieldPct}% | P50=${sc.backtest.p50YieldPct}% | P90=${sc.backtest.p90YieldPct}% | Risco quebra=${sc.backtest.failureRiskPct}% | Água poupada=${sc.impact.waterSavedM3Ha} m³/ha | N=${sc.impact.nitrogenFixedKgHa}`,
+      margin + 3.5,
+      y + 11.2
+    );
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.2);
     doc.setTextColor(55, 65, 60);
     const summaryLines = doc.splitTextToSize(sc.summary, contentWidth - 7);
-    doc.text(summaryLines.slice(0, 2), margin + 3.5, y + 11.5);
+    doc.text(summaryLines.slice(0, 2), margin + 3.5, y + 16.5);
 
     doc.setFont('helvetica', 'italic');
     doc.setTextColor(95, 70, 30);
     const noteLines = doc.splitTextToSize(`Validação agronômica: ${sc.agronomistNotes}`, contentWidth - 7);
-    doc.text(noteLines.slice(0, 2), margin + 3.5, y + 23);
+    doc.text(noteLines.slice(0, 2), margin + 3.5, y + 27.5);
 
     y += boxH + 4;
   });

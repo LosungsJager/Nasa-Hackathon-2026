@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { ActiveLayer, FarmAnalysis, GridCell500m } from '../types/agro';
-import { Check, Pencil, Trash2 } from 'lucide-react';
+import type { ActiveLayer, BacktestYearPoint, FarmAnalysis, GridCell500m } from '../types/agro';
+import { ArrowRight, Check, Pause, Pencil, Play, Trash2 } from 'lucide-react';
 
 interface FarmMapProps {
   center: [number, number];
@@ -15,6 +15,8 @@ interface FarmMapProps {
   onCancelDrawing: () => void;
   onPolygonComplete: (coords: [number, number][]) => void;
   onClearPolygon: () => void;
+  backtestSeries?: BacktestYearPoint[];
+  onOpenCropDashboard?: () => void;
 }
 
 function getCellColor(cell: GridCell500m, layer: ActiveLayer): string {
@@ -104,6 +106,8 @@ export function FarmMap({
   onCancelDrawing,
   onPolygonComplete,
   onClearPolygon,
+  backtestSeries = [],
+  onOpenCropDashboard,
 }: FarmMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -114,6 +118,17 @@ export function FarmMap({
   const [draftPoints, setDraftPoints] = useState<[number, number][]>([]);
   const draftPointsRef = useRef<[number, number][]>([]);
   draftPointsRef.current = draftPoints;
+
+  const [yearIdx, setYearIdx] = useState<number>(16); // default 2022 drought highlight
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!isPlaying || backtestSeries.length === 0) return;
+    const timer = setInterval(() => {
+      setYearIdx((prev) => (prev + 1) % backtestSeries.length);
+    }, 650);
+    return () => clearInterval(timer);
+  }, [isPlaying, backtestSeries.length]);
 
   // Initialize Leaflet map once
   useEffect(() => {
@@ -364,6 +379,59 @@ export function FarmMap({
           </div>
         )}
       </div>
+
+      {/* Time Travel Bar (2006–2025 Backtest) */}
+      {analysis && backtestSeries.length > 0 && (
+        <div className="map-timetravel-card">
+          <div className="tt-header">
+            <button
+              type="button"
+              className="tt-play-btn"
+              onClick={() => setIsPlaying((p) => !p)}
+              title={isPlaying ? 'Pausar linha do tempo' : 'Reproduzir 20 safras'}
+            >
+              {isPlaying ? <Pause size={13} /> : <Play size={13} />}
+            </button>
+            <div className="tt-info">
+              <span className="tt-label">Viagem no Tempo (NASA POWER 2006–2025)</span>
+              <div className="tt-status-row">
+                <strong>Safra {backtestSeries[yearIdx]?.year}</strong>
+                <span className={`tt-pill ${backtestSeries[yearIdx]?.status}`}>
+                  {backtestSeries[yearIdx]?.status === 'seca'
+                    ? 'Seca'
+                    : backtestSeries[yearIdx]?.status === 'excesso'
+                      ? 'Chuva Extrema'
+                      : 'Normal'}
+                </span>
+                <span className="tt-yield">
+                  Rend. Baseline: {backtestSeries[yearIdx]?.relYieldPct}%
+                </span>
+              </div>
+            </div>
+            {onOpenCropDashboard && (
+              <button
+                type="button"
+                className="tt-cta-btn"
+                onClick={onOpenCropDashboard}
+              >
+                <span>Dashboard de Culturas</span>
+                <ArrowRight size={14} />
+              </button>
+            )}
+          </div>
+          <input
+            type="range"
+            className="tt-slider"
+            min={0}
+            max={backtestSeries.length - 1}
+            value={yearIdx}
+            onChange={(e) => {
+              setIsPlaying(false);
+              setYearIdx(Number(e.target.value));
+            }}
+          />
+        </div>
+      )}
 
       {/* Layer Legend */}
       <div className="map-legend-card">
