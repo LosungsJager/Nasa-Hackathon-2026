@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, FileDown, LayoutGrid, Map as MapIcon, MapPin } from 'lucide-react';
+import { BookOpen, FileDown, LayoutGrid, LocateFixed, Map as MapIcon, MapPin, Search } from 'lucide-react';
 import { DEFAULT_CROPS_CATALOG, REGION_PRESETS } from './data/localAgroData';
 import { analyzeFarmPolygon } from './services/nasaDataService';
 import { evaluateRotationScenarios, runSensitivityAnalysis } from './engine/rotationEngine';
@@ -55,6 +55,8 @@ export function App() {
 
   const [analysis, setAnalysis] = useState<FarmAnalysis | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [cityQuery, setCityQuery] = useState<string>('');
+  const [isLocating, setIsLocating] = useState<boolean>(false);
 
   const runAnalysis = useCallback(async (coords: [number, number][]) => {
     setIsLoading(true);
@@ -69,6 +71,57 @@ export function App() {
   useEffect(() => {
     runAnalysis(REGION_PRESETS[0].polygonCoords);
   }, [runAnalysis]);
+
+  const focusLocation = useCallback(
+    (lat: number, lng: number) => {
+      const d = 0.0023; // ~25 ha area
+      setMapCenter([lat, lng]);
+      setMapZoom(14);
+      setIsDrawing(false);
+      setViewMode('map');
+      runAnalysis([
+        [lat + d, lng - d],
+        [lat + d, lng + d],
+        [lat - d, lng + d],
+        [lat - d, lng - d],
+      ]);
+    },
+    [runAnalysis]
+  );
+
+  const handleCitySearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = cityQuery.trim();
+    if (!q) return;
+    setIsLocating(true);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`
+      );
+      if (!res.ok) return;
+      const items = (await res.json()) as { lat: string; lon: string }[];
+      if (items.length > 0) {
+        focusLocation(Number(items[0].lat), Number(items[0].lon));
+      }
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) return;
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsLocating(false);
+        focusLocation(pos.coords.latitude, pos.coords.longitude);
+      },
+      () => {
+        setIsLocating(false);
+      },
+      { timeout: 8000 }
+    );
+  };
 
   const handlePresetChange = (presetId: string) => {
     const preset = REGION_PRESETS.find((p) => p.id === presetId);
@@ -177,6 +230,28 @@ export function App() {
         </nav>
 
         <div className="top-actions">
+          <form className="city-search-form" onSubmit={handleCitySearch}>
+            <Search size={14} />
+            <input
+              type="text"
+              placeholder="Buscar cidade..."
+              aria-label="Buscar cidade"
+              value={cityQuery}
+              onChange={(e) => setCityQuery(e.target.value)}
+            />
+          </form>
+
+          <button
+            type="button"
+            className="gps-btn"
+            onClick={handleUseMyLocation}
+            disabled={isLocating}
+            title="Ir para minha localização atual (GPS)"
+          >
+            <LocateFixed size={15} />
+            <span>Minha localização</span>
+          </button>
+
           <div className="preset-picker">
             <MapPin size={15} />
             <label htmlFor="region-preset-select" className="sr-only">
@@ -255,30 +330,35 @@ export function App() {
                     <div className="ind-cell measured">
                       <span className="ind-tag medido">CLIMA • 20 ANOS (NASA)</span>
                       <strong>
-                        {analysis.indicators.annualAvgTempC}°C • {analysis.indicators.annualMeanPrecipMm} mm/ano
+                        {analysis.indicators.annualAvgTempC}°C • {analysis.indicators.annualMeanPrecipMm} mm de chuva/ano
                       </strong>
                     </div>
                     <div className="ind-cell measured">
                       <span className="ind-tag medido">RISCOS NO ANO (NASA)</span>
                       <strong>
-                        Geada: {analysis.indicators.frostDaysPerYear}d • Calor ≥32°C: {analysis.indicators.heatStressDaysPerYear}d
+                        Geada: {analysis.indicators.frostDaysPerYear} dias • Calor forte: {analysis.indicators.heatStressDaysPerYear} dias
                       </strong>
                     </div>
                     <div className="ind-cell estimated">
                       <span className="ind-tag derivado">ÁGUA NA SAFRA</span>
                       <strong>
-                        {analysis.indicators.seasonalWaterDeficitMm > 0
-                          ? `Falta média: ${analysis.indicators.seasonalWaterDeficitMm} mm`
-                          : 'Chuva suficiente na safra'}
+                        {analysis.indicators.seasonalWaterDeficitMm <= 10
+                          ? 'Chuva suficiente na safra'
+                          : analysis.indicators.seasonalWaterDeficitMm <= 80
+                            ? `Falta pouca água (${analysis.indicators.seasonalWaterDeficitMm} mm)`
+                            : `Falta água na safra (${analysis.indicators.seasonalWaterDeficitMm} mm)`}
                       </strong>
                     </div>
                     <div className="ind-cell estimated">
-                      <span className="ind-tag derivado">SOLO E RELEVO</span>
+                      <span className="ind-tag derivado">SOLO E TERRENO</span>
                       <strong>
-                        Erosão {analysis.indicators.erosionLevel}
-                        {analysis.indicators.slopePct !== undefined
-                          ? ` • Decliv. ${analysis.indicators.slopePct}%`
-                          : ''}
+                        {analysis.indicators.slopePct === undefined
+                          ? `Erosão ${analysis.indicators.erosionLevel}`
+                          : analysis.indicators.slopePct < 2
+                            ? `Terreno plano • Erosão ${analysis.indicators.erosionLevel}`
+                            : analysis.indicators.slopePct < 6
+                              ? `Levemente inclinado • Erosão ${analysis.indicators.erosionLevel}`
+                              : `Terreno inclinado • Erosão ${analysis.indicators.erosionLevel}`}
                       </strong>
                     </div>
                   </div>

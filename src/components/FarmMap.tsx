@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { BacktestYearPoint, FarmAnalysis, GibsLayerId, NasaBasemapId } from '../types/agro';
-import { ArrowRight, Check, ExternalLink, Pause, Pencil, Play, Trash2 } from 'lucide-react';
+import { ArrowRight, Check, MapPin, Pause, Pencil, Play, Trash2 } from 'lucide-react';
 
 interface FarmMapProps {
   center: [number, number];
@@ -162,6 +162,7 @@ export function FarmMap({
 
   const [yearIdx, setYearIdx] = useState<number>(Math.max(0, backtestSeries.length - 3));
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [isQuickPin, setIsQuickPin] = useState<boolean>(false);
 
   useEffect(() => {
     if (backtestSeries.length > 0 && yearIdx >= backtestSeries.length) {
@@ -237,6 +238,31 @@ export function FarmMap({
     }
   }, [gibsLayer]);
 
+  // Quick 1-click mode handler
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !isQuickPin) return;
+
+    map.getContainer().style.cursor = 'crosshair';
+    const handleQuickClick = (e: L.LeafletMouseEvent) => {
+      const { lat, lng } = e.latlng;
+      const d = 0.0023; // ~25 ha area around clicked point
+      setIsQuickPin(false);
+      onPolygonComplete([
+        [lat + d, lng - d],
+        [lat + d, lng + d],
+        [lat - d, lng + d],
+        [lat - d, lng - d],
+      ]);
+    };
+
+    map.on('click', handleQuickClick);
+    return () => {
+      map.off('click', handleQuickClick);
+      map.getContainer().style.cursor = '';
+    };
+  }, [isQuickPin, onPolygonComplete]);
+
   // Drawing mode handlers
   useEffect(() => {
     const map = mapRef.current;
@@ -244,10 +270,13 @@ export function FarmMap({
 
     if (!isDrawing) {
       setDraftPoints([]);
-      map.getContainer().style.cursor = '';
+      if (!isQuickPin) {
+        map.getContainer().style.cursor = '';
+      }
       return;
     }
 
+    setIsQuickPin(false);
     map.getContainer().style.cursor = 'crosshair';
 
     const handleClick = (e: L.LeafletMouseEvent) => {
@@ -270,7 +299,7 @@ export function FarmMap({
       map.off('dblclick', handleDblClick);
       map.getContainer().style.cursor = '';
     };
-  }, [isDrawing, onPolygonComplete]);
+  }, [isDrawing, isQuickPin, onPolygonComplete]);
 
   // Render draft polygon vertices
   useEffect(() => {
@@ -349,16 +378,25 @@ export function FarmMap({
 
       {/* Drawing Toolbar */}
       <div className="map-draw-toolbar">
-        {!isDrawing ? (
+        {!isDrawing && !isQuickPin ? (
           <>
             <button
               type="button"
-              id="btn-draw-polygon"
+              id="btn-quick-pin"
               className="map-tool-btn primary"
+              onClick={() => setIsQuickPin(true)}
+            >
+              <MapPin size={15} />
+              <span>Marcar com 1 clique</span>
+            </button>
+            <button
+              type="button"
+              id="btn-draw-polygon"
+              className="map-tool-btn"
               onClick={onStartDrawing}
             >
               <Pencil size={15} />
-              <span>Desenhar talhão</span>
+              <span>Desenhar contorno</span>
             </button>
             {analysis && (
               <button
@@ -366,23 +404,23 @@ export function FarmMap({
                 id="btn-clear-polygon"
                 className="map-tool-btn"
                 onClick={onClearPolygon}
-                title="Limpar polígono"
+                title="Limpar área"
               >
                 <Trash2 size={15} />
               </button>
             )}
-            <a
-              href="https://power.larc.nasa.gov/data-access-viewer/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="map-tool-btn"
-              title="Abrir NASA POWER Data Access Viewer oficial (bloqueado em iframe por X-Frame-Options: DENY)"
-              style={{ textDecoration: 'none' }}
-            >
-              <ExternalLink size={14} />
-              <span>POWER Viewer</span>
-            </a>
           </>
+        ) : isQuickPin ? (
+          <div className="draw-active-pill">
+            <span>Clique no centro da sua lavoura</span>
+            <button
+              type="button"
+              className="map-tool-btn"
+              onClick={() => setIsQuickPin(false)}
+            >
+              Cancelar
+            </button>
+          </div>
         ) : (
           <div className="draw-active-pill">
             <span>Marque os vértices no mapa ({draftPoints.length} pontos)</span>

@@ -166,6 +166,55 @@ body,
   cursor: not-allowed;
 }
 
+.city-search-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 2px;
+  padding: 5px 8px;
+  color: #ffffff;
+}
+
+.city-search-form input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.8rem;
+  width: 120px;
+}
+
+.city-search-form input::placeholder {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.gps-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 2px;
+  padding: 6px 10px;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.gps-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.gps-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 /* Workspace Layout */
 .workspace-body {
   display: flex;
