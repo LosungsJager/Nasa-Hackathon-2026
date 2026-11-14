@@ -190,7 +190,7 @@ export function evaluateRotationScenarios(
 
   const powerTag = indicators.powerSource === 'live-daily' ? 'medido' : 'derivado';
 
-  // Comparative 0-100 indices derived from simulated ETc, P50, failure risk, and soil erosion
+  // Comparative 0-100 indices derived from simulated ETc, P50, failure risk, and soil+DEM properties
   const baseWaterIdx = Math.round(clamp(100 - baseBt.meanSeasonEtcMm / 8.5, 20, 95));
   const covWaterIdx = Math.round(clamp(100 - coverBt.meanSeasonEtcMm / 8.5, 20, 95));
   const drWaterIdx = Math.round(clamp(100 - droughtBt.meanSeasonEtcMm / 8.5, 20, 95));
@@ -207,11 +207,29 @@ export function evaluateRotationScenarios(
     )
   );
 
-  const erosionPenalty = indicators.estimatedErosionIndex > 55 ? 12 : 4;
-  const baseSoilIdx = Math.round(clamp(48 + (crop.nitrogenFixing ? 10 : -6) - erosionPenalty, 20, 95));
-  const covSoilIdx = Math.round(clamp(82 + (constraints.hasNoTillPlanter ? 6 : 0), 20, 96));
-  const drSoilIdx = Math.round(clamp(66 + (indicators.estimatedErosionIndex > 50 ? 6 : 0), 20, 95));
-  const forSoilIdx = Math.round(clamp(80 + (constraints.hasLivestock ? 5 : 0), 20, 96));
+  // Soil health index driven by polygon OM%, AWC, and real rain+slope erosion index
+  const siteSoilBase = clamp(
+    35 + soil.organicMatterPct * 6.5 + (soil.availableWaterCapacityMm - 70) * 0.14 - indicators.estimatedErosionIndex * 0.32,
+    20,
+    78
+  );
+  const residueBonus = crop.residueCover === 'Alta' ? 10 : crop.residueCover === 'Média' ? 4 : -4;
+  const baseSoilIdx = Math.round(
+    clamp(siteSoilBase + (crop.nitrogenFixing ? 6 : 0) + residueBonus, 20, 95)
+  );
+  const covSoilIdx = Math.round(
+    clamp(
+      siteSoilBase + 22 + (constraints.hasNoTillPlanter ? 8 : 0) + (indicators.estimatedErosionIndex > 45 ? 6 : 0),
+      25,
+      96
+    )
+  );
+  const drSoilIdx = Math.round(
+    clamp(siteSoilBase + 12 + (indicators.seasonalWaterDeficitMm > 140 ? 6 : 0), 20, 95)
+  );
+  const forSoilIdx = Math.round(
+    clamp(siteSoilBase + 20 + (constraints.hasLivestock ? 7 : 0), 25, 96)
+  );
 
   const refTon = soil.historicalYieldTonHa[currentCrop] ?? 3.2;
   const baseMargin = Math.round(refTon * 1100);

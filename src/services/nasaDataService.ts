@@ -163,6 +163,129 @@ async function queryCmrGranule(
   }
 }
 
+async function fetchSoilProfile(lat: number, lng: number): Promise<LocalSoilProfile> {
+  const localProfile = resolveLocalSoil(lat, lng);
+  if (localProfile.countryCode !== 'GLOBAL') {
+    return localProfile;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5500);
+  try {
+    const url = `https://rest.isric.org/soilgrids/v2.0/properties/query?lon=${lng.toFixed(
+      4
+    )}&lat=${lat.toFixed(
+      4
+    )}&property=clay&property=sand&property=soc&depth=0-5cm&depth=15-30cm&value=mean`;
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error(`SoilGrids HTTP ${res.status}`);
+
+    const json = (await res.json()) as {
+      properties?: {
+        layers?: {
+          name: string;
+          depths?: { values?: { mean?: number | null } }[];
+        }[];
+      };
+    };
+
+    const layers = json.properties?.layers ?? [];
+    const getLayerMean = (name: string): number | null => {
+      const layer = layers.find((l) => l.name === name);
+      if (!layer?.depths?.length) return null;
+      const vals = layer.depths
+        .map((d) => d.values?.mean)
+        .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+      if (vals.length === 0) return null;
+      return vals.reduce((a, b) => a + b, 0) / vals.length;
+    };
+
+    const clayRaw = getLayerMean('clay');
+    const sandRaw = getLayerMean('sand');
+    const socRaw = getLayerMean('soc');
+    if (clayRaw === null || sandRaw === null) {
+      throw new Error('Empty SoilGrids pixel');
+    }
+
+    const clayPct = Math.round(clamp(clayRaw / 10, 2, 85));
+    const sandPct = Math.round(clamp(sandRaw / 10, 2, 95));
+    const organicMatterPct =
+      socRaw !== null
+        ? Number(clamp((socRaw / 10) * 0.1724, 0.5, 10).toFixed(1))
+        : localProfile.organicMatterPct;
+
+    const awcMm = Math.round(
+      clamp(55 + clayPct * 1.1 + organicMatterPct * 7 - sandPct * 0.35, 45, 175)
+    );
+    const textureLabel =
+      clayPct >= 40
+        ? `Argilosa (${clayPct}% argila)`
+        : sandPct >= 65
+          ? `Arenosa (${sandPct}% areia, ${clayPct}% argila)`
+          : `Franco-argilo-arenosa (${clayPct}% argila)`;
+
+    return {
+      ...localProfile,
+      confidenceLevel: 'Média',
+      dataSourceLabel: 'ISRIC SoilGrids 250m (API ao vivo)',
+      soilClass:
+        clayPct >= 40
+          ? 'Latossolo / Argissolo (SoilGrids)'
+          : sandPct >= 65
+            ? 'Neossolo / Solo Arenoso (SoilGrids)'
+            : 'Cambissolo / Franco (SoilGrids)',
+      texture: textureLabel,
+      organicMatterPct,
+      waterRetentionCapacity: awcMm >= 120 ? 'Alta' : awcMm >= 85 ? 'Média' : 'Baixa',
+      availableWaterCapacityMm: awcMm,
+      erosionSusceptibility: sandPct >= 60 ? 'Alta' : clayPct >= 45 ? 'Moderada' : 'Baixa',
+      notes: 'Propriedades físicas extraídas via SoilGrids v2.0 (0–30 cm). Recomenda-se análise local.',
+    };
+  } catch {
+    clearTimeout(timeoutId);
+    return {
+      ...localProfile,
+      dataSourceLabel: 'Estimativa global por latitude (SoilGrids sem cobertura)',
+    };
+  }
+}
+
+async function fetchPolygonSlope(
+  bbox: [number, number, number, number],
+  centLat: number,
+  centLng: number
+): Promise<{ meanElevationM?: number; slopePct?: number }> {
+  const [w, s, e, n] = bbox;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4500);
+  try {
+    const lats = [centLat, s, s, n, n].map((v) => v.toFixed(4)).join(',');
+    const lngs = [centLng, w, e, w, e].map((v) => v.toFixed(4)).join(',');
+    const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lngs}`;
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error('Elevation HTTP error');
+
+    const json = (await res.json()) as { elevation?: number[] };
+    const elevs = (json.elevation ?? []).filter((v) => typeof v === 'number' && Number.isFinite(v));
+    if (elevs.length < 2) return {};
+
+    const minE = Math.min(...elevs);
+    const maxE = Math.max(...elevs);
+    const meanElevationM = Math.round(elevs.reduce((a, b) => a + b, 0) / elevs.length);
+    const diagKm = Math.max(
+      0.3,
+      turf.distance(turf.point([w, s]), turf.point([e, n]), { units: 'kilometers' })
+    );
+    const slopePct = Number(clamp(((maxE - minE) / (diagKm * 1000)) * 100, 0.2, 35).toFixed(1));
+    return { meanElevationM, slopePct };
+  } catch {
+    clearTimeout(timeoutId);
+    return {};
+  }
+}
+
 export async function analyzeFarmPolygon(
   latLngCoords: [number, number][]
 ): Promise<FarmAnalysis> {
@@ -180,9 +303,10 @@ export async function analyzeFarmPolygon(
   const [centLng, centLat] = centroidFeat.geometry.coordinates;
   const bbox = turf.bbox(polygonGeoJson) as [number, number, number, number];
 
-  const [powerRes, soil, smapL4Cmr, smapL3Cmr, ecoCmr, srtmCmr] = await Promise.all([
+  const [powerRes, soil, demRes, smapL4Cmr, smapL3Cmr, ecoCmr, srtmCmr] = await Promise.all([
     fetchNasaPowerDaily(centLat, centLng),
-    Promise.resolve<LocalSoilProfile>(resolveLocalSoil(centLat, centLng)),
+    fetchSoilProfile(centLat, centLng),
+    fetchPolygonSlope(bbox, centLat, centLng),
     queryCmrGranule('SMAP L4 Zona Radicular', 'SPL4SMGP', bbox),
     queryCmrGranule('SMAP L3 Superficial 9km', 'SPL3SMP_E', bbox),
     queryCmrGranule('ECOSTRESS LST 70m', 'ECO_L2T_LSTE', bbox),
@@ -215,14 +339,35 @@ export async function analyzeFarmPolygon(
     (days.filter((d) => d.precipMm >= p95Threshold).length / yearsCount).toFixed(1)
   );
 
-  const seasonEt0 = meanEt0MmDay * 120;
-  const seasonPrecip = annualMeanPrecipMm * 0.42;
-  const seasonalWaterDeficitMm = Math.max(0, Math.round(seasonEt0 - seasonPrecip));
+  // Real growing-season water deficit computed directly from POWER daily records
+  const bySeasonYear = new Map<number, { et0: number; rain: number; count: number }>();
+  for (const d of days) {
+    const inSeason = centLat < 0 ? d.month >= 10 || d.month <= 3 : d.month >= 4 && d.month <= 9;
+    if (!inSeason) continue;
+    const cur = bySeasonYear.get(d.year) ?? { et0: 0, rain: 0, count: 0 };
+    if (cur.count < 120) {
+      cur.et0 += d.et0Mm;
+      cur.rain += d.precipMm;
+      cur.count += 1;
+      bySeasonYear.set(d.year, cur);
+    }
+  }
+  const validSeasons = Array.from(bySeasonYear.values()).filter((s) => s.count >= 60);
+  const seasonalWaterDeficitMm =
+    validSeasons.length > 0
+      ? Math.max(
+          0,
+          Math.round(
+            validSeasons.reduce((acc, s) => acc + (s.et0 - s.rain), 0) / validSeasons.length
+          )
+        )
+      : Math.max(0, Math.round(meanEt0MmDay * 120 - annualMeanPrecipMm * 0.42));
 
   const soilErosionBase =
-    soil.erosionSusceptibility === 'Alta' ? 35 : soil.erosionSusceptibility === 'Moderada' ? 20 : 10;
+    soil.erosionSusceptibility === 'Alta' ? 30 : soil.erosionSusceptibility === 'Moderada' ? 18 : 10;
+  const slopeFactor = demRes.slopePct !== undefined ? clamp(demRes.slopePct * 2.1, 1, 28) : 8;
   const estimatedErosionIndex = Math.round(
-    clamp(soilErosionBase + extremeRainDaysPerYear * 2.2 + annualMeanPrecipMm / 85, 10, 92)
+    clamp(soilErosionBase + slopeFactor + extremeRainDaysPerYear * 2.0 + annualMeanPrecipMm / 95, 10, 95)
   );
 
   const indicators: FieldIndicators = {
@@ -239,6 +384,8 @@ export async function analyzeFarmPolygon(
     estimatedErosionIndex,
     erosionLevel:
       estimatedErosionIndex >= 60 ? 'Alto' : estimatedErosionIndex >= 35 ? 'Moderado' : 'Baixo',
+    meanElevationM: demRes.meanElevationM,
+    slopePct: demRes.slopePct,
     cmrGranules: [smapL4Cmr, smapL3Cmr, ecoCmr, srtmCmr],
   };
 

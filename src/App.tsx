@@ -271,9 +271,12 @@ export function App() {
                       </strong>
                     </div>
                     <div className="ind-cell estimated">
-                      <span className="ind-tag derivado">DERIVADO • EROSÃO</span>
+                      <span className="ind-tag derivado">DERIVADO • EROSÃO / DEM</span>
                       <strong>
                         {analysis.indicators.estimatedErosionIndex}/100 ({analysis.indicators.erosionLevel})
+                        {analysis.indicators.slopePct !== undefined
+                          ? ` • Decliv. ${analysis.indicators.slopePct}% (${analysis.indicators.meanElevationM} m)`
+                          : ''}
                       </strong>
                     </div>
                   </div>

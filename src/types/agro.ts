@@ -102,9 +102,11 @@ export interface FieldIndicators {
   frostDaysPerYear: number;      // Medido (POWER T2M_MIN <= 2°C)
   heatStressDaysPerYear: number; // Medido (POWER T2M_MAX >= 32°C)
   extremeRainDaysPerYear: number;// Medido (POWER PRECTOTCORR >= P95)
-  seasonalWaterDeficitMm: number;// Derivado (balanço hídrico)
-  estimatedErosionIndex: number; // Derivado (chuva POWER + declividade/solo)
+  seasonalWaterDeficitMm: number;// Derivado (balanço hídrico da janela da safra)
+  estimatedErosionIndex: number; // Derivado (chuva POWER + declividade DEM + solo)
   erosionLevel: 'Baixo' | 'Moderado' | 'Alto';
+  meanElevationM?: number;       // Medido (DEM 90m / Open-Meteo Elevation)
+  slopePct?: number;             // Derivado (gradiente altimétrico no polígono)
   cmrGranules: CmrGranuleSummary[];
 }
 

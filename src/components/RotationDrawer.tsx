@@ -56,9 +56,9 @@ export function RotationDrawer({
                     <h3>{sc.title}</h3>
                     <p className="scenario-subtitle">{sc.subtitle}</p>
                   </div>
-                  <div className="overall-score">
+                  <div className="overall-score" title="Índice comparativo (0–100) calculado pelo modelo FAO-56 e manejo">
                     <span className="score-num">{sc.scores.overall}</span>
-                    <span className="score-label">Índice</span>
+                    <span className="score-label">Modelo</span>
                   </div>
                 </div>
 
