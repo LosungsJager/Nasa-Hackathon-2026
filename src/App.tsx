@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, FileDown, LayoutGrid, LocateFixed, Map as MapIcon, Search } from 'lucide-react';
+import { BookOpen, FileDown, Globe, LayoutGrid, LocateFixed, Map as MapIcon, Search } from 'lucide-react';
 import { DEFAULT_CROPS_CATALOG, REGION_PRESETS } from './data/localAgroData';
 import { analyzeFarmPolygon } from './services/nasaDataService';
 import { evaluateRotationScenarios, runSensitivityAnalysis } from './engine/rotationEngine';
@@ -9,6 +9,7 @@ import { FarmMap } from './components/FarmMap';
 import { RotationDrawer } from './components/RotationDrawer';
 import { CropDashboard } from './components/CropDashboard';
 import { MethodologyView } from './components/MethodologyView';
+import { tr, type Lang } from './i18n';
 import type {
   AppViewMode,
   ClimateStressScenario,
@@ -22,6 +23,7 @@ import type {
 } from './types/agro';
 
 export function App() {
+  const [lang, setLang] = useState<Lang>('pt');
   const [viewMode, setViewMode] = useState<AppViewMode>('map');
   const [mapCenter, setMapCenter] = useState<[number, number]>(REGION_PRESETS[0].center);
   const [mapZoom, setMapZoom] = useState<number>(REGION_PRESETS[0].zoom);
@@ -186,7 +188,7 @@ export function App() {
           </div>
         </div>
 
-        <nav className="view-switcher" aria-label="Navegação principal">
+        <nav className="view-switcher" aria-label={tr(lang, 'Navegação principal', 'Main navigation')}>
           <button
             type="button"
             id="tab-map"
@@ -194,7 +196,7 @@ export function App() {
             onClick={() => setViewMode('map')}
           >
             <MapIcon size={15} />
-            <span>Mapa do Talhão</span>
+            <span>{tr(lang, 'Mapa do Talhão', 'Field Map')}</span>
           </button>
           <button
             type="button"
@@ -203,7 +205,7 @@ export function App() {
             onClick={() => setViewMode('crops')}
           >
             <LayoutGrid size={15} />
-            <span>Comparar Culturas</span>
+            <span>{tr(lang, 'Comparar Culturas', 'Compare Crops')}</span>
           </button>
           <button
             type="button"
@@ -212,7 +214,7 @@ export function App() {
             onClick={() => setViewMode('methodology')}
           >
             <BookOpen size={15} />
-            <span>Fontes NASA</span>
+            <span>{tr(lang, 'Fontes NASA', 'NASA Sources')}</span>
           </button>
         </nav>
 
@@ -221,8 +223,8 @@ export function App() {
             <Search size={14} />
             <input
               type="text"
-              placeholder="Buscar cidade..."
-              aria-label="Buscar cidade"
+              placeholder={tr(lang, 'Buscar cidade...', 'Search city...')}
+              aria-label={tr(lang, 'Buscar cidade', 'Search city')}
               value={cityQuery}
               onChange={(e) => setCityQuery(e.target.value)}
             />
@@ -233,10 +235,21 @@ export function App() {
             className="gps-btn"
             onClick={handleUseMyLocation}
             disabled={isLocating}
-            title="Ir para minha localização atual (GPS)"
+            title={tr(lang, 'Ir para minha localização atual (GPS)', 'Go to my current location (GPS)')}
           >
             <LocateFixed size={15} />
-            <span>Minha localização</span>
+            <span>{tr(lang, 'Minha localização', 'My location')}</span>
+          </button>
+
+          <button
+            type="button"
+            id="btn-lang-toggle"
+            className="lang-toggle-btn"
+            onClick={() => setLang((prev) => (prev === 'pt' ? 'en' : 'pt'))}
+            title={tr(lang, 'Switch to English', 'Mudar para Português')}
+          >
+            <Globe size={14} />
+            <span>{lang === 'pt' ? 'PT | EN' : 'EN | PT'}</span>
           </button>
 
           <button
@@ -247,7 +260,7 @@ export function App() {
             onClick={handleDownloadPdf}
           >
             <FileDown size={15} />
-            <span>Baixar relatório (PDF)</span>
+            <span>{tr(lang, 'Baixar relatório (PDF)', 'Download PDF')}</span>
           </button>
         </div>
       </header>
@@ -255,6 +268,7 @@ export function App() {
       {/* Main Workspace */}
       <div className="workspace-body">
         <ControlSidebar
+          lang={lang}
           cropsCatalog={cropsCatalog}
           currentCrop={currentCrop}
           onCropChange={setCurrentCrop}
@@ -280,6 +294,7 @@ export function App() {
             <div className="workbench-split">
               <div className="workbench-center">
                 <FarmMap
+                  lang={lang}
                   center={mapCenter}
                   zoom={mapZoom}
                   analysis={analysis}
@@ -295,39 +310,58 @@ export function App() {
                 />
 
                 {analysis && (
-                  <div className="indicators-strip" aria-label="Resumo do talhão">
+                  <div className="indicators-strip" aria-label={tr(lang, 'Resumo do talhão', 'Field summary')}>
                     <div className="ind-cell measured">
-                      <span className="ind-tag medido">CLIMA • 20 ANOS (NASA)</span>
+                      <span className="ind-tag medido">
+                        {tr(lang, 'CLIMA • 20 ANOS (NASA)', 'CLIMATE • 20 YRS (NASA)')}
+                      </span>
                       <strong>
-                        {analysis.indicators.annualAvgTempC}°C • {analysis.indicators.annualMeanPrecipMm} mm de chuva/ano
+                        {analysis.indicators.annualAvgTempC}°C • {analysis.indicators.annualMeanPrecipMm}{' '}
+                        {tr(lang, 'mm de chuva/ano', 'mm rain/yr')}
                       </strong>
                     </div>
                     <div className="ind-cell measured">
-                      <span className="ind-tag medido">RISCOS NO ANO (NASA)</span>
+                      <span className="ind-tag medido">
+                        {tr(lang, 'RISCOS NO ANO (NASA)', 'ANNUAL RISKS (NASA)')}
+                      </span>
                       <strong>
-                        Geada: {analysis.indicators.frostDaysPerYear} dias • Calor forte: {analysis.indicators.heatStressDaysPerYear} dias
+                        {tr(lang, 'Geada:', 'Frost:')} {analysis.indicators.frostDaysPerYear}{' '}
+                        {tr(lang, 'dias', 'days')} • {tr(lang, 'Calor forte:', 'Heat stress:')}{' '}
+                        {analysis.indicators.heatStressDaysPerYear} {tr(lang, 'dias', 'days')}
                       </strong>
                     </div>
                     <div className="ind-cell estimated">
-                      <span className="ind-tag derivado">ÁGUA NA SAFRA</span>
+                      <span className="ind-tag derivado">
+                        {tr(lang, 'ÁGUA NA SAFRA', 'SEASON WATER')}
+                      </span>
                       <strong>
                         {analysis.indicators.seasonalWaterDeficitMm <= 10
-                          ? 'Chuva suficiente na safra'
+                          ? tr(lang, 'Chuva suficiente na safra', 'Enough rain for season')
                           : analysis.indicators.seasonalWaterDeficitMm <= 80
-                            ? `Falta pouca água (${analysis.indicators.seasonalWaterDeficitMm} mm)`
-                            : `Falta água na safra (${analysis.indicators.seasonalWaterDeficitMm} mm)`}
+                            ? tr(
+                                lang,
+                                `Falta pouca água (${analysis.indicators.seasonalWaterDeficitMm} mm)`,
+                                `Mild water deficit (${analysis.indicators.seasonalWaterDeficitMm} mm)`
+                              )
+                            : tr(
+                                lang,
+                                `Falta água na safra (${analysis.indicators.seasonalWaterDeficitMm} mm)`,
+                                `Water deficit (${analysis.indicators.seasonalWaterDeficitMm} mm)`
+                              )}
                       </strong>
                     </div>
                     <div className="ind-cell estimated">
-                      <span className="ind-tag derivado">SOLO E TERRENO</span>
+                      <span className="ind-tag derivado">
+                        {tr(lang, 'SOLO E TERRENO', 'SOIL & TERRAIN')}
+                      </span>
                       <strong>
                         {analysis.indicators.slopePct === undefined
-                          ? `Erosão ${analysis.indicators.erosionLevel}`
+                          ? `${tr(lang, 'Erosão', 'Erosion')} ${analysis.indicators.erosionLevel}`
                           : analysis.indicators.slopePct < 2
-                            ? `Terreno plano • Erosão ${analysis.indicators.erosionLevel}`
+                            ? `${tr(lang, 'Terreno plano', 'Flat terrain')} • ${tr(lang, 'Erosão', 'Erosion')} ${analysis.indicators.erosionLevel}`
                             : analysis.indicators.slopePct < 6
-                              ? `Levemente inclinado • Erosão ${analysis.indicators.erosionLevel}`
-                              : `Terreno inclinado • Erosão ${analysis.indicators.erosionLevel}`}
+                              ? `${tr(lang, 'Levemente inclinado', 'Gentle slope')} • ${tr(lang, 'Erosão', 'Erosion')} ${analysis.indicators.erosionLevel}`
+                              : `${tr(lang, 'Terreno inclinado', 'Steep slope')} • ${tr(lang, 'Erosão', 'Erosion')} ${analysis.indicators.erosionLevel}`}
                       </strong>
                     </div>
                   </div>
@@ -335,6 +369,7 @@ export function App() {
               </div>
 
               <RotationDrawer
+                lang={lang}
                 scenarios={scenarios}
                 areaHa={analysis?.areaHa ?? null}
                 isLoading={isLoading}
@@ -346,6 +381,7 @@ export function App() {
           {viewMode === 'crops' && (
             <div className="stage-scroll">
               <CropDashboard
+                lang={lang}
                 analysis={analysis}
                 cropsCatalog={cropsCatalog}
                 onUpdateCropParam={handleUpdateCropParam}
@@ -364,7 +400,7 @@ export function App() {
 
           {viewMode === 'methodology' && (
             <div className="stage-scroll">
-              <MethodologyView analysis={analysis} />
+              <MethodologyView lang={lang} analysis={analysis} />
             </div>
           )}
         </main>
@@ -373,10 +409,14 @@ export function App() {
       {/* Footer Attribution */}
       <footer className="app-footer">
         <span>
-          Equipe <strong>Lösungsjäger</strong> • NASA Space Apps Challenge 2026 (Lajeado, RS) • 14/11/2026
+          {tr(lang, 'Equipe', 'Team')} <strong>Lösungsjäger</strong> • NASA Space Apps Challenge 2026 (Lajeado, RS) • 14/11/2026
         </span>
         <span>
-          Ferramenta de apoio à decisão — não substitui análise laboratorial de solo nem recomendação agronômica.
+          {tr(
+            lang,
+            'Ferramenta de apoio à decisão — não substitui análise laboratorial de solo nem recomendação agronômica.',
+            'Decision-support tool — does not replace lab soil testing or certified agronomic advice.'
+          )}
         </span>
       </footer>
     </div>

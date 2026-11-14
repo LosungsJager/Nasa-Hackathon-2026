@@ -1,4 +1,5 @@
 import { CheckSquare, ChevronDown, Globe, Layers, Leaf, Sliders } from 'lucide-react';
+import { getCropDisplayName, tr, type Lang } from '../i18n';
 import type {
   CropId,
   CropInfo,
@@ -10,6 +11,7 @@ import type {
 } from '../types/agro';
 
 interface ControlSidebarProps {
+  lang: Lang;
   cropsCatalog: Record<CropId, CropInfo>;
   currentCrop: CropId;
   onCropChange: (crop: CropId) => void;
@@ -24,22 +26,23 @@ interface ControlSidebarProps {
   analysis: FarmAnalysis | null;
 }
 
-const NASA_BASEMAP_OPTIONS: { id: NasaBasemapId; label: string; scale: string }[] = [
-  { id: 'hybrid_hd', label: 'Satélite + Ruas', scale: 'Detalhado' },
-  { id: 'osm_streets', label: 'Mapa de Ruas', scale: 'Estradas' },
-  { id: 'viirs_truecolor', label: 'NASA VIIRS', scale: 'Regional' },
-  { id: 'modis_truecolor', label: 'NASA MODIS', scale: 'Regional' },
-  { id: 'bluemarble', label: 'NASA Blue Marble', scale: 'Global' },
+const NASA_BASEMAP_OPTIONS: { id: NasaBasemapId; pt: string; en: string; scalePt: string; scaleEn: string }[] = [
+  { id: 'hybrid_hd', pt: 'Satélite + Ruas', en: 'Satellite + Streets', scalePt: 'Detalhado', scaleEn: 'Detailed' },
+  { id: 'osm_streets', pt: 'Mapa de Ruas', en: 'Street Map', scalePt: 'Estradas', scaleEn: 'Roads' },
+  { id: 'viirs_truecolor', pt: 'NASA VIIRS', en: 'NASA VIIRS', scalePt: 'Regional', scaleEn: 'Regional' },
+  { id: 'modis_truecolor', pt: 'NASA MODIS', en: 'NASA MODIS', scalePt: 'Regional', scaleEn: 'Regional' },
+  { id: 'bluemarble', pt: 'NASA Blue Marble', en: 'NASA Blue Marble', scalePt: 'Global', scaleEn: 'Global' },
 ];
 
-const GIBS_OPTIONS: { id: GibsLayerId; label: string; scale: string }[] = [
-  { id: 'none', label: 'Desligada', scale: 'Mapa limpo' },
-  { id: 'modis_ndvi', label: 'Vegetação (NDVI)', scale: 'NASA 250m' },
-  { id: 'smap_l4', label: 'Umidade do solo', scale: 'NASA 9km' },
-  { id: 'gpm_imerg', label: 'Chuva recente', scale: 'NASA 10km' },
+const GIBS_OPTIONS: { id: GibsLayerId; pt: string; en: string; scalePt: string; scaleEn: string }[] = [
+  { id: 'none', pt: 'Desligada', en: 'Off', scalePt: 'Mapa limpo', scaleEn: 'Clean map' },
+  { id: 'modis_ndvi', pt: 'Vegetação (NDVI)', en: 'Vegetation (NDVI)', scalePt: 'NASA 250m', scaleEn: 'NASA 250m' },
+  { id: 'smap_l4', pt: 'Umidade do solo', en: 'Soil Moisture', scalePt: 'NASA 9km', scaleEn: 'NASA 9km' },
+  { id: 'gpm_imerg', pt: 'Chuva recente', en: 'Recent Rain', scalePt: 'NASA 10km', scaleEn: 'NASA 10km' },
 ];
 
 export function ControlSidebar({
+  lang,
   cropsCatalog,
   currentCrop,
   onCropChange,
@@ -58,21 +61,21 @@ export function ControlSidebar({
   };
 
   return (
-    <aside className="control-sidebar" aria-label="Configuração da lavoura">
+    <aside className="control-sidebar" aria-label={tr(lang, 'Configuração da lavoura', 'Farm setup')}>
       <div className="sidebar-section">
         <div className="section-title">
           <Leaf size={13} />
-          <span>1. O que você planta hoje?</span>
+          <span>{tr(lang, '1. O que você planta hoje?', '1. What do you grow today?')}</span>
         </div>
         <select
-          aria-label="Cultura atual"
+          aria-label={tr(lang, 'Cultura atual', 'Current crop')}
           className="sidebar-select"
           value={currentCrop}
           onChange={(e) => onCropChange(e.target.value as CropId)}
         >
           {(Object.keys(cropsCatalog) as CropId[]).map((id) => (
             <option key={id} value={id}>
-              {cropsCatalog[id].name}
+              {getCropDisplayName(id, cropsCatalog[id].name, lang)}
             </option>
           ))}
         </select>
@@ -81,7 +84,7 @@ export function ControlSidebar({
       <div className="sidebar-section">
         <div className="section-title">
           <CheckSquare size={13} />
-          <span>2. O que tem na propriedade?</span>
+          <span>{tr(lang, '2. O que tem na propriedade?', '2. Farm equipment & setup')}</span>
         </div>
         <div className="constraints-list">
           <label className="check-row">
@@ -92,7 +95,7 @@ export function ControlSidebar({
                 onConstraintsChange({ ...constraints, hasIrrigation: e.target.checked })
               }
             />
-            <span>Tenho irrigação</span>
+            <span>{tr(lang, 'Tenho irrigação', 'I have irrigation')}</span>
           </label>
           <label className="check-row">
             <input
@@ -102,7 +105,7 @@ export function ControlSidebar({
                 onConstraintsChange({ ...constraints, hasNoTillPlanter: e.target.checked })
               }
             />
-            <span>Faço plantio direto</span>
+            <span>{tr(lang, 'Faço plantio direto', 'I use no-till planting')}</span>
           </label>
           <label className="check-row">
             <input
@@ -112,7 +115,7 @@ export function ControlSidebar({
                 onConstraintsChange({ ...constraints, hasLivestock: e.target.checked })
               }
             />
-            <span>Tenho gado / pastagem</span>
+            <span>{tr(lang, 'Tenho gado / pastagem', 'I have livestock / pasture')}</span>
           </label>
         </div>
       </div>
@@ -120,24 +123,24 @@ export function ControlSidebar({
       <div className="sidebar-section">
         <div className="section-title">
           <Sliders size={13} />
-          <span>3. Qual seu foco agora?</span>
+          <span>{tr(lang, '3. Qual seu foco agora?', '3. Main goal right now')}</span>
         </div>
         <div className="layer-buttons-list" style={{ marginBottom: 6 }}>
           {[
             {
-              label: 'Equilibrado (recomendado)',
+              label: tr(lang, 'Equilibrado (recomendado)', 'Balanced (recommended)'),
               vals: { lessWater: 75, moreIncome: 65, improveSoil: 80, reduceErosion: 60 },
             },
             {
-              label: 'Evitar falta de água / seca',
+              label: tr(lang, 'Evitar falta de água / seca', 'Save water / drought safety'),
               vals: { lessWater: 95, moreIncome: 50, improveSoil: 70, reduceErosion: 50 },
             },
             {
-              label: 'Focar em mais colheita',
+              label: tr(lang, 'Focar em mais colheita', 'Maximize harvest & income'),
               vals: { lessWater: 45, moreIncome: 95, improveSoil: 55, reduceErosion: 40 },
             },
             {
-              label: 'Recuperar solo e conter erosão',
+              label: tr(lang, 'Recuperar solo e conter erosão', 'Rebuild soil & stop erosion'),
               vals: { lessWater: 60, moreIncome: 45, improveSoil: 95, reduceErosion: 95 },
             },
           ].map((preset) => {
@@ -161,14 +164,14 @@ export function ControlSidebar({
 
         <details className="sidebar-details">
           <summary className="details-summary">
-            <span>Ajuste fino (%)</span>
+            <span>{tr(lang, 'Ajuste fino (%)', 'Fine-tune (%)')}</span>
             <ChevronDown size={13} />
           </summary>
           <div className="details-body" style={{ paddingTop: 8 }}>
             <div className="priority-sliders">
               <label className="slider-row">
                 <div className="slider-header">
-                  <span>Economizar água</span>
+                  <span>{tr(lang, 'Economizar água', 'Save water')}</span>
                   <span className="slider-val">{priorities.lessWater}%</span>
                 </div>
                 <input
@@ -182,7 +185,7 @@ export function ControlSidebar({
 
               <label className="slider-row">
                 <div className="slider-header">
-                  <span>Mais colheita</span>
+                  <span>{tr(lang, 'Mais colheita', 'More harvest')}</span>
                   <span className="slider-val">{priorities.moreIncome}%</span>
                 </div>
                 <input
@@ -196,7 +199,7 @@ export function ControlSidebar({
 
               <label className="slider-row">
                 <div className="slider-header">
-                  <span>Proteger o solo</span>
+                  <span>{tr(lang, 'Proteger o solo', 'Soil health')}</span>
                   <span className="slider-val">{priorities.improveSoil}%</span>
                 </div>
                 <input
@@ -210,7 +213,7 @@ export function ControlSidebar({
 
               <label className="slider-row">
                 <div className="slider-header">
-                  <span>Conter erosão</span>
+                  <span>{tr(lang, 'Conter erosão', 'Stop erosion')}</span>
                   <span className="slider-val">{priorities.reduceErosion}%</span>
                 </div>
                 <input
@@ -232,7 +235,7 @@ export function ControlSidebar({
             <strong>{analysis.soil.municipality} ({analysis.areaHa} ha)</strong>
             <p>{analysis.soil.soilClass}</p>
             <p className="soil-src">
-              Retenção de água: {analysis.soil.waterRetentionCapacity} ({analysis.soil.availableWaterCapacityMm} mm)
+              {tr(lang, 'Retenção de água', 'Water retention')}: {analysis.soil.waterRetentionCapacity} ({analysis.soil.availableWaterCapacityMm} mm)
             </p>
           </div>
         </div>
@@ -243,7 +246,7 @@ export function ControlSidebar({
           <summary className="details-summary">
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <Layers size={13} />
-              Visão do mapa e satélites
+              {tr(lang, 'Visão do mapa e satélites', 'Map & satellite layers')}
             </span>
             <ChevronDown size={14} />
           </summary>
@@ -251,7 +254,7 @@ export function ControlSidebar({
           <div className="details-body">
             <div className="section-title" style={{ marginTop: 8 }}>
               <Globe size={12} />
-              <span>Tipo de mapa</span>
+              <span>{tr(lang, 'Tipo de mapa', 'Map style')}</span>
             </div>
             <div className="layer-buttons-list">
               {NASA_BASEMAP_OPTIONS.map((opt) => (
@@ -261,15 +264,15 @@ export function ControlSidebar({
                   className={`layer-row-btn ${basemap === opt.id ? 'active' : ''}`}
                   onClick={() => onBasemapChange(opt.id)}
                 >
-                  <span>{opt.label}</span>
-                  <small>{opt.scale}</small>
+                  <span>{lang === 'en' ? opt.en : opt.pt}</span>
+                  <small>{lang === 'en' ? opt.scaleEn : opt.scalePt}</small>
                 </button>
               ))}
             </div>
 
             <div className="section-title" style={{ marginTop: 10 }}>
               <Layers size={12} />
-              <span>Camada de satélite (NASA)</span>
+              <span>{tr(lang, 'Camada de satélite (NASA)', 'NASA satellite overlay')}</span>
             </div>
             <div className="layer-buttons-list">
               {GIBS_OPTIONS.map((opt) => (
@@ -279,15 +282,17 @@ export function ControlSidebar({
                   className={`layer-row-btn ${gibsLayer === opt.id ? 'active' : ''}`}
                   onClick={() => onGibsLayerChange(opt.id)}
                 >
-                  <span>{opt.label}</span>
-                  <small>{opt.scale}</small>
+                  <span>{lang === 'en' ? opt.en : opt.pt}</span>
+                  <small>{lang === 'en' ? opt.scaleEn : opt.scalePt}</small>
                 </button>
               ))}
             </div>
 
             {analysis && (
               <div className="cmr-box" style={{ marginTop: 10 }}>
-                <span className="cmr-title">Fontes consultadas no talhão:</span>
+                <span className="cmr-title">
+                  {tr(lang, 'Fontes consultadas no talhão:', 'Live sources queried:')}
+                </span>
                 {analysis.indicators.cmrGranules.map((g) => (
                   <div key={g.shortName} className="cmr-row">
                     <span>{g.dataset}</span>

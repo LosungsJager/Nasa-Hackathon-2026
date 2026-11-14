@@ -13,6 +13,7 @@ import {
   Tractor,
   TrendingUp,
 } from 'lucide-react';
+import { getCropDisplayName, tr, type Lang } from '../i18n';
 import type {
   ClimateStressScenario,
   CropId,
@@ -24,6 +25,7 @@ import type {
 } from '../types/agro';
 
 interface CropDashboardProps {
+  lang: Lang;
   analysis: FarmAnalysis | null;
   cropsCatalog: Record<CropId, CropInfo>;
   onUpdateCropParam: (id: CropId, field: 'kc' | 'ky' | 'cycleDays', value: number) => void;
@@ -40,7 +42,8 @@ interface CropDashboardProps {
 
 type CardTab = 'why' | 'evidence' | 'gaps';
 
-const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const MONTHS_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function getScenarioIcon(id: RotationScenario['id']) {
   if (id === 'baseline') return <Repeat size={17} />;
@@ -49,13 +52,14 @@ function getScenarioIcon(id: RotationScenario['id']) {
   return <Tractor size={17} />;
 }
 
-function provLabel(p: DataProvenance): string {
-  if (p === 'medido') return 'Medido';
-  if (p === 'derivado') return 'Derivado';
-  return 'Premissa';
+function provLabel(p: DataProvenance, lang: Lang): string {
+  if (p === 'medido') return tr(lang, 'Medido', 'Measured');
+  if (p === 'derivado') return tr(lang, 'Derivado', 'Derived');
+  return tr(lang, 'Premissa', 'Assumption');
 }
 
 export function CropDashboard({
+  lang,
   analysis,
   cropsCatalog,
   onUpdateCropParam,
@@ -71,6 +75,7 @@ export function CropDashboard({
 }: CropDashboardProps) {
   const [cardTabs, setCardTabs] = useState<Record<string, CardTab>>({});
   const [showCropTable, setShowCropTable] = useState(false);
+  const MONTHS = lang === 'en' ? MONTHS_EN : MONTHS_PT;
 
   const monthlyWaterBalance = useMemo(() => {
     if (!analysis) return [];
@@ -82,12 +87,18 @@ export function CropDashboard({
       const et0Mm = Math.round(mDays.reduce((s, d) => s + d.et0Mm, 0) / yearsCount);
       return { label, rainMm, et0Mm };
     });
-  }, [analysis]);
+  }, [analysis, MONTHS]);
 
   if (isLoading) {
     return (
       <div className="dashboard-state-box">
-        <p>Carregando série diária (2005–2024) e executando balanço hídrico FAO-56/33...</p>
+        <p>
+          {tr(
+            lang,
+            'Carregando série diária (2005–2024) e executando balanço hídrico FAO-56/33...',
+            'Loading daily climate series (2005–2024) and running FAO-56/33 water balance...'
+          )}
+        </p>
       </div>
     );
   }
@@ -96,7 +107,11 @@ export function CropDashboard({
     return (
       <div className="dashboard-state-box">
         <p>
-          Desenhe o limite da propriedade na aba <strong>Mapa &amp; Talhão</strong> para iniciar a análise.
+          {tr(
+            lang,
+            'Marque sua terra na aba Mapa do Talhão para iniciar a análise.',
+            'Mark your field on the Field Map tab to start the analysis.'
+          )}
         </p>
       </div>
     );
@@ -119,7 +134,7 @@ export function CropDashboard({
         <div className="detected-left">
           <div className="history-edit-row">
             <label htmlFor="crop-history-input" className="confirm-label">
-              Histórico informado (editável):
+              {tr(lang, 'Histórico informado (editável):', 'Reported history (editable):')}
             </label>
             <input
               id="crop-history-input"
@@ -130,25 +145,26 @@ export function CropDashboard({
             />
           </div>
           <div className="detected-sub">
-            <strong>{analysis.soil.municipality}</strong> • {analysis.areaHa} ha • Solo:{' '}
-            {analysis.soil.soilClass} (AWC {analysis.soil.availableWaterCapacityMm} mm) •{' '}
+            <strong>{analysis.soil.municipality}</strong> • {analysis.areaHa} ha •{' '}
+            {tr(lang, 'Solo:', 'Soil:')} {analysis.soil.soilClass} (AWC{' '}
+            {analysis.soil.availableWaterCapacityMm} mm) •{' '}
             <span className={`conf-pill ${analysis.soil.confidenceLevel.toLowerCase()}`}>
-              Confiança {analysis.soil.confidenceLevel}
+              {tr(lang, 'Confiança', 'Confidence')} {analysis.soil.confidenceLevel}
             </span>
           </div>
         </div>
 
         <div className="detected-right">
-          <span className="confirm-label">Cultura principal:</span>
+          <span className="confirm-label">{tr(lang, 'Cultura principal:', 'Main crop:')}</span>
           <select
-            aria-label="Cultura principal"
+            aria-label={tr(lang, 'Cultura principal', 'Main crop')}
             className="crop-select-inline"
             value={currentCrop}
             onChange={(e) => onCropChange(e.target.value as CropId)}
           >
             {(Object.keys(cropsCatalog) as CropId[]).map((id) => (
               <option key={id} value={id}>
-                {cropsCatalog[id].name}
+                {getCropDisplayName(id, cropsCatalog[id].name, lang)}
               </option>
             ))}
           </select>
@@ -157,7 +173,9 @@ export function CropDashboard({
             className="reset-stress-btn"
             onClick={() => setShowCropTable((v) => !v)}
           >
-            {showCropTable ? 'Ocultar parâmetros' : 'Editar tabela Kc/Ky'}
+            {showCropTable
+              ? tr(lang, 'Ocultar parâmetros', 'Hide parameters')
+              : tr(lang, 'Editar tabela Kc/Ky', 'Edit Kc/Ky table')}
           </button>
         </div>
       </section>
@@ -167,9 +185,13 @@ export function CropDashboard({
         <section className="dash-card">
           <div className="dash-card-header">
             <div>
-              <h3>Parâmetros agronômicos (editáveis)</h3>
+              <h3>{tr(lang, 'Parâmetros agronômicos (editáveis)', 'Agronomic parameters (editable)')}</h3>
               <p className="dash-sub">
-                Alterar Kc, Ky ou ciclo recalcula imediatamente o balanço hídrico FAO-56/33
+                {tr(
+                  lang,
+                  'Alterar Kc, Ky ou ciclo recalcula imediatamente o balanço hídrico FAO-56/33',
+                  'Changing Kc, Ky, or cycle length immediately recalculates the FAO-56/33 water balance'
+                )}
               </p>
             </div>
           </div>
@@ -177,11 +199,11 @@ export function CropDashboard({
             <table className="meth-table">
               <thead>
                 <tr>
-                  <th>Cultura</th>
-                  <th>Ciclo (dias)</th>
+                  <th>{tr(lang, 'Cultura', 'Crop')}</th>
+                  <th>{tr(lang, 'Ciclo (dias)', 'Cycle (days)')}</th>
                   <th>Kc (FAO-56)</th>
                   <th>Ky (FAO-33)</th>
-                  <th>Fonte</th>
+                  <th>{tr(lang, 'Fonte', 'Source')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -189,7 +211,7 @@ export function CropDashboard({
                   const c = cropsCatalog[id];
                   return (
                     <tr key={id}>
-                      <td><strong>{c.name}</strong></td>
+                      <td><strong>{getCropDisplayName(id, c.name, lang)}</strong></td>
                       <td>
                         <input
                           type="number"
@@ -243,30 +265,32 @@ export function CropDashboard({
         <div className="dash-card">
           <div className="dash-card-header">
             <div>
-              <h3>Chuva média vs. ET₀ (mm/mês)</h3>
+              <h3>{tr(lang, 'Chuva média vs. ET₀ (mm/mês)', 'Average rain vs. ET₀ (mm/month)')}</h3>
               <p className="dash-sub">
                 {analysis.indicators.powerSource === 'live-daily'
-                  ? 'Medido: NASA POWER diário (2005–2024)'
-                  : 'Estimativa offline (sem resposta do POWER)'}{' '}
-                • Azul = chuva, Âmbar = ET₀
+                  ? tr(lang, 'Medido: NASA POWER diário (2005–2024)', 'Measured: NASA POWER daily (2005–2024)')
+                  : tr(lang, 'Estimativa offline (sem resposta do POWER)', 'Offline estimate (no POWER response)')}{' '}
+                • {tr(lang, 'Azul = chuva, Âmbar = ET₀', 'Blue = rain, Amber = ET₀')}
               </p>
             </div>
             <div className="risk-chips">
               <span className="risk-chip frost">
-                <Snowflake size={12} /> Geada: {analysis.indicators.frostDaysPerYear} d/ano
+                <Snowflake size={12} /> {tr(lang, 'Geada:', 'Frost:')}{' '}
+                {analysis.indicators.frostDaysPerYear} {tr(lang, 'd/ano', 'd/yr')}
               </span>
               <span className="risk-chip rain">
-                <CloudRain size={12} /> Chuva P95: {analysis.indicators.extremeRainDaysPerYear} d/ano
+                <CloudRain size={12} /> {tr(lang, 'Chuva P95:', 'P95 Rain:')}{' '}
+                {analysis.indicators.extremeRainDaysPerYear} {tr(lang, 'd/ano', 'd/yr')}
               </span>
             </div>
           </div>
 
-          <div className="ndvi-chart" aria-label="Balanço mensal chuva e ET0 em mm">
+          <div className="ndvi-chart" aria-label={tr(lang, 'Balanço mensal chuva e ET0 em mm', 'Monthly rain and ET0 balance in mm')}>
             {monthlyWaterBalance.map((m) => (
               <div key={m.label} className="ndvi-col">
                 <div
                   className="dual-bar-track"
-                  title={`${m.label}: Chuva ${m.rainMm} mm | ET₀ ${m.et0Mm} mm`}
+                  title={`${m.label}: ${tr(lang, 'Chuva', 'Rain')} ${m.rainMm} mm | ET₀ ${m.et0Mm} mm`}
                 >
                   <div
                     className="bar-rain"
@@ -286,9 +310,9 @@ export function CropDashboard({
         <div className="dash-card">
           <div className="dash-card-header">
             <div>
-              <h3>Cenários de estresse climático</h3>
+              <h3>{tr(lang, 'Cenários de estresse climático', 'Climate stress scenarios')}</h3>
               <p className="dash-sub">
-                {cropInfo.name} • Kc {cropInfo.kc} / Ky {cropInfo.ky} ({cropInfo.sourceRef})
+                {getCropDisplayName(currentCrop, cropInfo.name, lang)} • Kc {cropInfo.kc} / Ky {cropInfo.ky} ({cropInfo.sourceRef})
               </p>
             </div>
             {(climateStress.rainDeltaPct !== 0 || climateStress.tempDeltaC !== 0) && (
@@ -297,7 +321,7 @@ export function CropDashboard({
                 className="reset-stress-btn"
                 onClick={() => onClimateStressChange({ rainDeltaPct: 0, tempDeltaC: 0 })}
               >
-                Resetar
+                {tr(lang, 'Resetar', 'Reset')}
               </button>
             )}
           </div>
@@ -306,7 +330,7 @@ export function CropDashboard({
             <label className="slider-row">
               <div className="slider-header">
                 <span>
-                  <CloudRain size={13} /> Variação de chuva na safra
+                  <CloudRain size={13} /> {tr(lang, 'Variação de chuva na safra', 'Growing-season rain change')}
                 </span>
                 <span className="slider-val">
                   {climateStress.rainDeltaPct > 0 ? '+' : ''}
@@ -331,7 +355,7 @@ export function CropDashboard({
             <label className="slider-row">
               <div className="slider-header">
                 <span>
-                  <Thermometer size={13} /> Aumento de temperatura (ET₀)
+                  <Thermometer size={13} /> {tr(lang, 'Aumento de temperatura (ET₀)', 'Temperature increase (ET₀)')}
                 </span>
                 <span className="slider-val">+{climateStress.tempDeltaC.toFixed(1)} °C</span>
               </div>
@@ -353,11 +377,19 @@ export function CropDashboard({
 
           {sensitivity && (
             <div className="sensitivity-box">
-              <strong>Sensibilidade (±20% em Kc e Ky):</strong>{' '}
+              <strong>{tr(lang, 'Sensibilidade (±20% em Kc e Ky):', 'Sensitivity (±20% on Kc & Ky):')}</strong>{' '}
               <span>
                 {sensitivity.isStable
-                  ? 'Ranking estável — a rotação recomendada não muda sob variação de ±20%.'
-                  : `Sensível a parâmetros: Kc−20% → ${sensitivity.kcMinus20Winner}; Ky+20% → ${sensitivity.kyPlus20Winner}.`}
+                  ? tr(
+                      lang,
+                      'Ranking estável — a rotação recomendada não muda sob variação de ±20%.',
+                      'Stable ranking — recommended rotation does not change under ±20% variation.'
+                    )
+                  : tr(
+                      lang,
+                      `Sensível a parâmetros: Kc−20% → ${sensitivity.kcMinus20Winner}; Ky+20% → ${sensitivity.kyPlus20Winner}.`,
+                      `Parameter-sensitive: Kc−20% → ${sensitivity.kcMinus20Winner}; Ky+20% → ${sensitivity.kyPlus20Winner}.`
+                    )}
               </span>
             </div>
           )}
@@ -367,9 +399,13 @@ export function CropDashboard({
       {/* 3. The 4 Rotation Scenarios */}
       <section className="dash-scenarios-section">
         <div className="section-heading-row">
-          <h2>Rotações comparadas (2005–2024)</h2>
+          <h2>{tr(lang, 'Rotações comparadas (2005–2024)', 'Compared rotations (2005–2024)')}</h2>
           <span className="heading-hint">
-            P10 pior caso • P50 mediana • Quebra &lt; 60% • Índices comparativos 0–100
+            {tr(
+              lang,
+              'P10 pior caso • P50 mediana • Quebra < 60% • Índices comparativos 0–100',
+              'P10 worst case • P50 median • Crop failure < 60% • Comparative index 0–100'
+            )}
           </span>
         </div>
 
@@ -389,7 +425,8 @@ export function CropDashboard({
                     <div>
                       {sc.recommended && (
                         <span className="recommended-tag">
-                          <ShieldCheck size={12} /> Maior score ponderado
+                          <ShieldCheck size={12} />{' '}
+                          {tr(lang, 'Maior score ponderado', 'Highest weighted score')}
                         </span>
                       )}
                       <h3>{sc.title}</h3>
@@ -398,14 +435,14 @@ export function CropDashboard({
                   </div>
                   <div className="overall-score">
                     <span className="score-num">{sc.scores.overall}</span>
-                    <span className="score-label">Índice</span>
+                    <span className="score-label">{tr(lang, 'Índice', 'Score')}</span>
                   </div>
                 </header>
 
                 {/* P10 / P50 / P90 Risk Distribution */}
                 <div className="backtest-box">
                   <div className="backtest-top">
-                    <span>Rendimento relativo (20 anos)</span>
+                    <span>{tr(lang, 'Rendimento relativo (20 anos)', 'Relative yield (20 years)')}</span>
                     <span
                       className={`failure-badge ${
                         sc.backtest.failureRiskPct >= 25
@@ -415,7 +452,7 @@ export function CropDashboard({
                             : 'low'
                       }`}
                     >
-                      Quebra: {sc.backtest.failureRiskPct}%
+                      {tr(lang, 'Quebra:', 'Failure:')} {sc.backtest.failureRiskPct}%
                     </span>
                   </div>
 
@@ -446,19 +483,19 @@ export function CropDashboard({
                 <div className="impact-kpis">
                   <div className="impact-kpi">
                     <span className="kpi-label">
-                      <Droplets size={11} /> ETc poupada
+                      <Droplets size={11} /> {tr(lang, 'ETc poupada', 'ETc saved')}
                     </span>
                     <strong>{sc.impact.waterSavedM3Ha} m³/ha</strong>
                   </div>
                   <div className="impact-kpi">
                     <span className="kpi-label">
-                      <Sprout size={11} /> N (faixa)
+                      <Sprout size={11} /> {tr(lang, 'N (faixa)', 'N (range)')}
                     </span>
                     <strong>{sc.impact.nitrogenFixedKgHa}</strong>
                   </div>
                   <div className="impact-kpi">
                     <span className="kpi-label">
-                      <TrendingUp size={11} /> Margem est.*
+                      <TrendingUp size={11} /> {tr(lang, 'Margem est.*', 'Est. margin*')}
                     </span>
                     <strong>R$ {sc.impact.estMarginBrlHa}/ha</strong>
                   </div>
@@ -473,7 +510,7 @@ export function CropDashboard({
                     className={`card-tab-btn ${activeTab === 'why' ? 'active' : ''}`}
                     onClick={() => setTab(sc.id, 'why')}
                   >
-                    Resumo
+                    {tr(lang, 'Resumo', 'Summary')}
                   </button>
                   <button
                     type="button"
@@ -482,7 +519,7 @@ export function CropDashboard({
                     className={`card-tab-btn ${activeTab === 'evidence' ? 'active' : ''}`}
                     onClick={() => setTab(sc.id, 'evidence')}
                   >
-                    Dados de suporte
+                    {tr(lang, 'Dados de suporte', 'Supporting data')}
                   </button>
                   <button
                     type="button"
@@ -491,7 +528,7 @@ export function CropDashboard({
                     className={`card-tab-btn ${activeTab === 'gaps' ? 'active' : ''}`}
                     onClick={() => setTab(sc.id, 'gaps')}
                   >
-                    Lacunas &amp; Agrônomo
+                    {tr(lang, 'Lacunas & Agrônomo', 'Gaps & Agronomist')}
                   </button>
                 </div>
 
@@ -509,7 +546,7 @@ export function CropDashboard({
                       {sc.supportingData.map((item) => (
                         <li key={item.text}>
                           <span className={`prov-badge ${item.provenance}`}>
-                            {provLabel(item.provenance)}
+                            {provLabel(item.provenance, lang)}
                           </span>{' '}
                           {item.text}
                         </li>
@@ -521,7 +558,7 @@ export function CropDashboard({
                     <div className="gaps-panel">
                       <div className="gap-block">
                         <strong>
-                          <HelpCircle size={12} /> Lacunas de dados:
+                          <HelpCircle size={12} /> {tr(lang, 'Lacunas de dados:', 'Data gaps:')}
                         </strong>
                         <ul>
                           {sc.dataGaps.map((g) => (
@@ -531,7 +568,7 @@ export function CropDashboard({
                       </div>
                       <div className="gap-block warn">
                         <strong>
-                          <AlertTriangle size={12} /> Revisão agronômica:
+                          <AlertTriangle size={12} /> {tr(lang, 'Revisão agronômica:', 'Agronomic review:')}
                         </strong>
                         <p>{sc.agronomistNotes}</p>
                       </div>
@@ -543,7 +580,11 @@ export function CropDashboard({
           })}
         </div>
         <p className="margin-disclaimer">
-          *Margem estimada com referência regional CONAB/EMATER (ilustrativa). Validação contra quebra municipal real (PAM/EMATER) pendente.
+          {tr(
+            lang,
+            '*Margem estimada com referência regional CONAB/EMATER (ilustrativa). Validação contra quebra municipal real (PAM/EMATER) pendente.',
+            '*Estimated margin based on regional CONAB/EMATER reference (illustrative). Validation against municipal crop loss data (PAM/EMATER) pending.'
+          )}
         </p>
       </section>
     </div>

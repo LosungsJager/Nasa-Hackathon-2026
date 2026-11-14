@@ -3,8 +3,10 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { BacktestYearPoint, FarmAnalysis, GibsLayerId, NasaBasemapId } from '../types/agro';
 import { ArrowRight, Check, MapPin, Pause, Pencil, Play, Trash2 } from 'lucide-react';
+import { tr, type Lang } from '../i18n';
 
 interface FarmMapProps {
+  lang: Lang;
   center: [number, number];
   zoom: number;
   analysis: FarmAnalysis | null;
@@ -136,6 +138,7 @@ function getPolygonYearColor(pt: BacktestYearPoint | undefined): string {
 }
 
 export function FarmMap({
+  lang,
   center,
   zoom,
   analysis,
@@ -387,7 +390,7 @@ export function FarmMap({
               onClick={() => setIsQuickPin(true)}
             >
               <MapPin size={15} />
-              <span>Marcar com 1 clique</span>
+              <span>{tr(lang, 'Marcar com 1 clique', '1-click mark')}</span>
             </button>
             <button
               type="button"
@@ -396,7 +399,7 @@ export function FarmMap({
               onClick={onStartDrawing}
             >
               <Pencil size={15} />
-              <span>Desenhar contorno</span>
+              <span>{tr(lang, 'Desenhar contorno', 'Draw boundary')}</span>
             </button>
             {analysis && (
               <button
@@ -404,7 +407,7 @@ export function FarmMap({
                 id="btn-clear-polygon"
                 className="map-tool-btn"
                 onClick={onClearPolygon}
-                title="Limpar área"
+                title={tr(lang, 'Limpar área', 'Clear area')}
               >
                 <Trash2 size={15} />
               </button>
@@ -412,18 +415,24 @@ export function FarmMap({
           </>
         ) : isQuickPin ? (
           <div className="draw-active-pill">
-            <span>Clique no centro da sua lavoura</span>
+            <span>{tr(lang, 'Clique no centro da sua lavoura', 'Click the center of your field')}</span>
             <button
               type="button"
               className="map-tool-btn"
               onClick={() => setIsQuickPin(false)}
             >
-              Cancelar
+              {tr(lang, 'Cancelar', 'Cancel')}
             </button>
           </div>
         ) : (
           <div className="draw-active-pill">
-            <span>Marque os vértices no mapa ({draftPoints.length} pontos)</span>
+            <span>
+              {tr(
+                lang,
+                `Marque os vértices no mapa (${draftPoints.length} pontos)`,
+                `Click field corners (${draftPoints.length} pts)`
+              )}
+            </span>
             {draftPoints.length >= 3 && (
               <button
                 type="button"
@@ -435,7 +444,7 @@ export function FarmMap({
                 }}
               >
                 <Check size={15} />
-                <span>Concluir</span>
+                <span>{tr(lang, 'Concluir', 'Finish')}</span>
               </button>
             )}
             <button
@@ -447,7 +456,7 @@ export function FarmMap({
                 onCancelDrawing();
               }}
             >
-              Cancelar
+              {tr(lang, 'Cancelar', 'Cancel')}
             </button>
           </div>
         )}
@@ -461,23 +470,25 @@ export function FarmMap({
               type="button"
               className="tt-play-btn"
               onClick={() => setIsPlaying((p) => !p)}
-              title={isPlaying ? 'Pausar' : 'Reproduzir safras'}
+              title={isPlaying ? tr(lang, 'Pausar', 'Pause') : tr(lang, 'Reproduzir safras', 'Play seasons')}
             >
               {isPlaying ? <Pause size={13} /> : <Play size={13} />}
             </button>
             <div className="tt-info">
-              <span className="tt-label">Histórico de safras na área (2005–2024)</span>
+              <span className="tt-label">
+                {tr(lang, 'Histórico de safras na área (2005–2024)', 'Field season history (2005–2024)')}
+              </span>
               <div className="tt-status-row">
-                <strong>Safra {currentPt?.year}</strong>
+                <strong>{tr(lang, 'Safra', 'Season')} {currentPt?.year}</strong>
                 <span className={`tt-pill ${currentPt?.status}`}>
                   {currentPt?.status === 'seca'
-                    ? 'Seca'
+                    ? tr(lang, 'Seca', 'Drought')
                     : currentPt?.status === 'excesso'
-                      ? 'Chuva forte'
-                      : 'Boa'}
+                      ? tr(lang, 'Chuva forte', 'Heavy rain')
+                      : tr(lang, 'Boa', 'Good')}
                 </span>
                 <span className="tt-yield">
-                  Colheita: {currentPt?.relYieldPct}%
+                  {tr(lang, 'Colheita', 'Yield')}: {currentPt?.relYieldPct}%
                 </span>
               </div>
             </div>
@@ -487,7 +498,7 @@ export function FarmMap({
                 className="tt-cta-btn"
                 onClick={onOpenCropDashboard}
               >
-                <span>Comparar</span>
+                <span>{tr(lang, 'Comparar', 'Compare')}</span>
                 <ArrowRight size={14} />
               </button>
             )}
@@ -508,19 +519,19 @@ export function FarmMap({
 
       {/* Honest Legend */}
       <div className="map-legend-card">
-        <div className="legend-title">Cor da lavoura no ano</div>
+        <div className="legend-title">{tr(lang, 'Cor da lavoura no ano', 'Season condition')}</div>
         <div className="legend-stops">
           <div className="legend-stop">
             <span className="legend-swatch" style={{ backgroundColor: '#7ed957' }} />
-            <span>Boa</span>
+            <span>{tr(lang, 'Boa', 'Good')}</span>
           </div>
           <div className="legend-stop">
             <span className="legend-swatch" style={{ backgroundColor: '#dc2626' }} />
-            <span>Seca</span>
+            <span>{tr(lang, 'Seca', 'Drought')}</span>
           </div>
           <div className="legend-stop">
             <span className="legend-swatch" style={{ backgroundColor: '#004aad' }} />
-            <span>Chuva forte</span>
+            <span>{tr(lang, 'Chuva forte', 'Heavy rain')}</span>
           </div>
         </div>
       </div>
