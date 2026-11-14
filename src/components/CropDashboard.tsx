@@ -5,7 +5,6 @@ import {
   CloudRain,
   Droplets,
   HelpCircle,
-  Leaf,
   Repeat,
   ShieldCheck,
   Snowflake,
@@ -222,22 +221,15 @@ export function CropDashboard({
               />
             </label>
           </div>
-
-          <div className="stress-note">
-            <Leaf size={13} />
-            <span>
-              Fonte agronômica: <strong>{cropInfo.sourceRef}</strong> • {cropInfo.pestBreakRole}.
-            </span>
-          </div>
         </div>
       </section>
 
       {/* 3. The 3 Rotation Scenarios (Side-by-Side Detailed Cards) */}
       <section className="dash-scenarios-section">
         <div className="section-heading-row">
-          <h2>Comparativo de Estratégias de Rotação (Backtest 20 Safras: 2006–2025)</h2>
+          <h2>Rotações (2006–2025)</h2>
           <span className="heading-hint">
-            P10 = pior caso (seca/excesso) • P50 = mediana • Quebra = rendimento &lt; 60%
+            P10 pior caso • P50 mediana • Quebra &lt; 60%
           </span>
         </div>
 
@@ -412,7 +404,7 @@ export function CropDashboard({
           })}
         </div>
         <p className="margin-disclaimer">
-          *Margem bruta estimada é apenas ilustrativa (produtividade relativa × referência regional CONAB/EMATER). Esta ferramenta apoia a decisão e não substitui assistência técnica agronômica.
+          *Margem estimada com referência CONAB/EMATER. Validar com agrônomo.
         </p>
       </section>
     </div>

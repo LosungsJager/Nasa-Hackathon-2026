@@ -393,7 +393,7 @@ export function FarmMap({
               {isPlaying ? <Pause size={13} /> : <Play size={13} />}
             </button>
             <div className="tt-info">
-              <span className="tt-label">Viagem no Tempo (NASA POWER 2006–2025)</span>
+              <span className="tt-label">Histórico 2006–2025</span>
               <div className="tt-status-row">
                 <strong>Safra {backtestSeries[yearIdx]?.year}</strong>
                 <span className={`tt-pill ${backtestSeries[yearIdx]?.status}`}>

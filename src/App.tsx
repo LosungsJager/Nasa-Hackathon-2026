@@ -96,9 +96,6 @@ export function App() {
           </div>
           <div>
             <h1>Field Shift</h1>
-            <span className="brand-sub">
-              O Seguro-Clima da Rotação • NASA Space Apps 2026
-            </span>
           </div>
         </div>
 

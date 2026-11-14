@@ -85,11 +85,11 @@ export function MethodologyView({ analysis }: MethodologyViewProps) {
     <div className="methodology-view">
       <div className="meth-hero dash-card">
         <div className="meth-hero-title">
-          <Scale size={20} className="accent-leaf" />
+          <Scale size={18} className="accent-leaf" />
           <div>
-            <h2>Transparência Científica & Honestidade Multi-Escala</h2>
+            <h2>Escalas Nativas &amp; Modelo FAO-56</h2>
             <p>
-              O Field Shift não "super-resolve" dados grosseiros artificialmente: cada camada da NASA é rotulada na sua escala nativa e combinada ao balanço hídrico FAO-56 / FAO-33.
+              Cada camada NASA opera na sua resolução original, sem interpolação artificial.
             </p>
           </div>
         </div>
