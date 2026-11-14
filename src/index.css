@@ -82,14 +82,23 @@ body,
 }
 
 .brand-logo {
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
   border-radius: 2px;
-  background: #7ed957;
+  background: #ffffff;
+  padding: 2px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #002659;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.brand-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .brand-group h1 {

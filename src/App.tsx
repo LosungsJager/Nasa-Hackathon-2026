@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, FileDown, LayoutGrid, Map as MapIcon, MapPin, Sprout } from 'lucide-react';
+import { BookOpen, FileDown, LayoutGrid, Map as MapIcon, MapPin } from 'lucide-react';
 import { DEFAULT_CROPS_CATALOG, REGION_PRESETS } from './data/localAgroData';
 import { analyzeFarmPolygon } from './services/nasaDataService';
 import { evaluateRotationScenarios, runSensitivityAnalysis } from './engine/rotationEngine';
@@ -139,7 +139,7 @@ export function App() {
       <header className="top-bar">
         <div className="brand-group">
           <div className="brand-logo">
-            <Sprout size={19} />
+            <img src="/logo.png" alt="Field Shift / Farmboost logo" className="brand-logo-img" />
           </div>
           <div>
             <h1>Field Shift</h1>
