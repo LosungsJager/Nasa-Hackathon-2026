@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, FileDown, LayoutGrid, LocateFixed, Map as MapIcon, MapPin, Search } from 'lucide-react';
+import { BookOpen, FileDown, LayoutGrid, LocateFixed, Map as MapIcon, Search } from 'lucide-react';
 import { DEFAULT_CROPS_CATALOG, REGION_PRESETS } from './data/localAgroData';
 import { analyzeFarmPolygon } from './services/nasaDataService';
 import { evaluateRotationScenarios, runSensitivityAnalysis } from './engine/rotationEngine';
@@ -23,7 +23,6 @@ import type {
 
 export function App() {
   const [viewMode, setViewMode] = useState<AppViewMode>('map');
-  const [selectedPresetId, setSelectedPresetId] = useState<string>(REGION_PRESETS[0].id);
   const [mapCenter, setMapCenter] = useState<[number, number]>(REGION_PRESETS[0].center);
   const [mapZoom, setMapZoom] = useState<number>(REGION_PRESETS[0].zoom);
 
@@ -121,18 +120,6 @@ export function App() {
       },
       { timeout: 8000 }
     );
-  };
-
-  const handlePresetChange = (presetId: string) => {
-    const preset = REGION_PRESETS.find((p) => p.id === presetId);
-    if (!preset) return;
-    setSelectedPresetId(presetId);
-    setMapCenter(preset.center);
-    setMapZoom(preset.zoom);
-    setCurrentCrop(preset.defaultCrop);
-    setCropHistoryNote(`${DEFAULT_CROPS_CATALOG[preset.defaultCrop].name} nos últimos ciclos`);
-    setIsDrawing(false);
-    runAnalysis(preset.polygonCoords);
   };
 
   const handlePolygonComplete = useCallback(
@@ -251,24 +238,6 @@ export function App() {
             <LocateFixed size={15} />
             <span>Minha localização</span>
           </button>
-
-          <div className="preset-picker">
-            <MapPin size={15} />
-            <label htmlFor="region-preset-select" className="sr-only">
-              Região
-            </label>
-            <select
-              id="region-preset-select"
-              value={selectedPresetId}
-              onChange={(e) => handlePresetChange(e.target.value)}
-            >
-              {REGION_PRESETS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
 
           <button
             type="button"
