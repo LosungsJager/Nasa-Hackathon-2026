@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { ActiveLayer, BacktestYearPoint, FarmAnalysis, GridCell500m } from '../types/agro';
+import type { BacktestYearPoint, FarmAnalysis, GibsLayerId } from '../types/agro';
 import { ArrowRight, Check, Pause, Pencil, Play, Trash2 } from 'lucide-react';
 
 interface FarmMapProps {
   center: [number, number];
   zoom: number;
   analysis: FarmAnalysis | null;
-  activeLayer: ActiveLayer;
-  showGibsOverlay: boolean;
+  gibsLayer: GibsLayerId;
   isDrawing: boolean;
   onStartDrawing: () => void;
   onCancelDrawing: () => void;
@@ -19,88 +18,42 @@ interface FarmMapProps {
   onOpenCropDashboard?: () => void;
 }
 
-function getCellColor(cell: GridCell500m, layer: ActiveLayer): string {
-  if (layer === 'moisture') {
-    const m = cell.moisturePct;
-    if (m < 14) return '#d97706'; // dry amber
-    if (m < 20) return '#eab308'; // moderate-low yellow
-    if (m < 27) return '#0ea5e9'; // adequate sky blue
-    return '#1d4ed8'; // humid deep blue
-  }
-  if (layer === 'ndvi') {
-    const n = cell.ndvi;
-    if (n < 0.32) return '#b45309'; // bare/stressed
-    if (n < 0.48) return '#eab308'; // sparse
-    if (n < 0.65) return '#65a30d'; // healthy
-    return '#15803d'; // dense vigor
-  }
-  if (layer === 'erosion') {
-    const e = cell.erosionRisk;
-    if (e >= 65) return '#dc2626'; // high risk red
-    if (e >= 42) return '#ea580c'; // moderate orange
-    if (e >= 25) return '#eab308'; // low-mod yellow
-    return '#16a34a'; // safe green
-  }
-  // temperature (ECOSTRESS LST)
-  const t = cell.surfaceTempC;
-  if (t >= 35) return '#b91c1c';
-  if (t >= 31) return '#ea580c';
-  if (t >= 26) return '#f59e0b';
-  return '#0d9488';
+function getRecentGibsDate(): string {
+  // 16 days ago ensures GIBS 8-day/L4 products are finalized and available
+  const d = new Date(Date.now() - 16 * 86400000);
+  // Cap to 2026-10-15 or earlier if clock is ahead
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
-const LAYER_LEGENDS: Record<
-  ActiveLayer,
-  { title: string; unit: string; stops: { color: string; label: string }[] }
-> = {
-  moisture: {
-    title: 'Umidade do Solo (SMAP 500m)',
-    unit: '% vol.',
-    stops: [
-      { color: '#d97706', label: '< 14% Seco' },
-      { color: '#eab308', label: '14–20%' },
-      { color: '#0ea5e9', label: '20–27%' },
-      { color: '#1d4ed8', label: '> 27% Úmido' },
-    ],
-  },
-  ndvi: {
-    title: 'Vigor Vegetativo (MODIS NDVI)',
-    unit: '0–1',
-    stops: [
-      { color: '#b45309', label: '< 0.32 Exposto' },
-      { color: '#eab308', label: '0.32–0.48' },
-      { color: '#65a30d', label: '0.48–0.65' },
-      { color: '#15803d', label: '> 0.65 Denso' },
-    ],
-  },
-  erosion: {
-    title: 'Risco de Erosão (SRTM + GPM + NDVI)',
-    unit: '0–100',
-    stops: [
-      { color: '#16a34a', label: '< 25 Baixo' },
-      { color: '#eab308', label: '25–42' },
-      { color: '#ea580c', label: '42–65' },
-      { color: '#dc2626', label: '> 65 Alto' },
-    ],
-  },
-  temperature: {
-    title: 'Temp. Superfície (ECOSTRESS LST)',
-    unit: '°C',
-    stops: [
-      { color: '#0d9488', label: '< 26 °C' },
-      { color: '#f59e0b', label: '26–31 °C' },
-      { color: '#ea580c', label: '31–35 °C' },
-      { color: '#b91c1c', label: '> 35 °C' },
-    ],
-  },
-};
+function getGibsTileUrl(layer: GibsLayerId): string | null {
+  const dateStr = getRecentGibsDate();
+  if (layer === 'modis_ndvi') {
+    return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_NDVI_8Day/default/${dateStr}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.png`;
+  }
+  if (layer === 'smap_l4') {
+    return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/SMAP_L4_Analyzed_Root_Zone_Soil_Moisture/default/${dateStr}/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png`;
+  }
+  if (layer === 'gpm_imerg') {
+    return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/IMERG_Precipitation_Rate/default/${dateStr}/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png`;
+  }
+  return null;
+}
+
+function getPolygonYearColor(pt: BacktestYearPoint | undefined): string {
+  if (!pt) return '#004aad';
+  if (pt.status === 'seca') return '#dc2626';
+  if (pt.status === 'excesso') return '#004aad';
+  return '#7ed957';
+}
 
 export function FarmMap({
   center,
   zoom,
   analysis,
-  activeLayer,
-  showGibsOverlay,
+  gibsLayer,
   isDrawing,
   onStartDrawing,
   onCancelDrawing,
@@ -111,16 +64,22 @@ export function FarmMap({
 }: FarmMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const gridLayerRef = useRef<L.LayerGroup | null>(null);
+  const polyLayerRef = useRef<L.LayerGroup | null>(null);
   const drawLayerRef = useRef<L.LayerGroup | null>(null);
-  const gibsLayerRef = useRef<L.TileLayer | null>(null);
+  const gibsTileRef = useRef<L.TileLayer | null>(null);
 
   const [draftPoints, setDraftPoints] = useState<[number, number][]>([]);
   const draftPointsRef = useRef<[number, number][]>([]);
   draftPointsRef.current = draftPoints;
 
-  const [yearIdx, setYearIdx] = useState<number>(16); // default 2022 drought highlight
+  const [yearIdx, setYearIdx] = useState<number>(Math.max(0, backtestSeries.length - 3));
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (backtestSeries.length > 0 && yearIdx >= backtestSeries.length) {
+      setYearIdx(backtestSeries.length - 1);
+    }
+  }, [backtestSeries.length, yearIdx]);
 
   useEffect(() => {
     if (!isPlaying || backtestSeries.length === 0) return;
@@ -130,7 +89,6 @@ export function FarmMap({
     return () => clearInterval(timer);
   }, [isPlaying, backtestSeries.length]);
 
-  // Initialize Leaflet map once
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
@@ -142,16 +100,14 @@ export function FarmMap({
 
     L.control.zoom({ position: 'topright' }).addTo(map);
 
-    // Satellite Basemap (Esri World Imagery)
     L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       {
-        attribution: 'Esri World Imagery | NASA Earth Observations',
+        attribution: 'Esri World Imagery | NASA POWER & GIBS',
         maxZoom: 18,
       }
     ).addTo(map);
 
-    // Subtle labels overlay
     L.tileLayer(
       'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
       {
@@ -160,7 +116,7 @@ export function FarmMap({
       }
     ).addTo(map);
 
-    gridLayerRef.current = L.layerGroup().addTo(map);
+    polyLayerRef.current = L.layerGroup().addTo(map);
     drawLayerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
 
@@ -170,36 +126,34 @@ export function FarmMap({
     };
   }, []);
 
-  // Fly to preset region when center changes
   useEffect(() => {
     if (!mapRef.current) return;
-    mapRef.current.flyTo(center, zoom, { duration: 0.9 });
+    mapRef.current.flyTo(center, zoom, { duration: 0.8 });
   }, [center, zoom]);
 
-  // Toggle NASA GIBS MODIS NDVI WMTS overlay
+  // Update live NASA GIBS tile layer
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    if (showGibsOverlay) {
-      if (!gibsLayerRef.current) {
-        gibsLayerRef.current = L.tileLayer(
-          'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_NDVI_8Day/default/2026-09-01/GoogleMapsCompatible_Level9/{z}/{y}/{x}.png',
-          {
-            opacity: 0.55,
-            maxNativeZoom: 9,
-            maxZoom: 18,
-            attribution: 'NASA GIBS MODIS NDVI',
-          }
-        );
-      }
-      gibsLayerRef.current.addTo(map);
-    } else if (gibsLayerRef.current) {
-      map.removeLayer(gibsLayerRef.current);
+    if (gibsTileRef.current) {
+      map.removeLayer(gibsTileRef.current);
+      gibsTileRef.current = null;
     }
-  }, [showGibsOverlay]);
 
-  // Handle drawing mode clicks
+    const url = getGibsTileUrl(gibsLayer);
+    if (url) {
+      const maxNativeZoom = gibsLayer === 'modis_ndvi' ? 9 : 6;
+      gibsTileRef.current = L.tileLayer(url, {
+        opacity: 0.58,
+        maxNativeZoom,
+        maxZoom: 18,
+        attribution: 'NASA GIBS',
+      }).addTo(map);
+    }
+  }, [gibsLayer]);
+
+  // Drawing mode handlers
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -234,17 +188,16 @@ export function FarmMap({
     };
   }, [isDrawing, onPolygonComplete]);
 
-  // Render draft polygon vertices while drawing
+  // Render draft polygon vertices
   useEffect(() => {
     const layer = drawLayerRef.current;
     if (!layer) return;
     layer.clearLayers();
-
     if (draftPoints.length === 0) return;
 
     if (draftPoints.length >= 2) {
       L.polyline(draftPoints, {
-        color: '#34d399',
+        color: '#7ed957',
         weight: 2.5,
         dashArray: '6, 6',
       }).addTo(layer);
@@ -252,10 +205,10 @@ export function FarmMap({
 
     if (draftPoints.length >= 3) {
       L.polygon(draftPoints, {
-        color: '#34d399',
+        color: '#7ed957',
         weight: 2,
-        fillColor: '#10b981',
-        fillOpacity: 0.2,
+        fillColor: '#7ed957',
+        fillOpacity: 0.22,
       }).addTo(layer);
     }
 
@@ -264,66 +217,53 @@ export function FarmMap({
         radius: idx === 0 ? 7 : 5,
         color: '#ffffff',
         weight: 2,
-        fillColor: idx === 0 ? '#10b981' : '#34d399',
+        fillColor: idx === 0 ? '#004aad' : '#7ed957',
         fillOpacity: 1,
       }).addTo(layer);
     });
   }, [draftPoints]);
 
-  // Render harmonized 500m grid + farm boundary
+  // Render farm polygon colored by selected backtest year
   useEffect(() => {
-    const layer = gridLayerRef.current;
+    const layer = polyLayerRef.current;
     if (!layer) return;
     layer.clearLayers();
-
     if (!analysis) return;
 
-    // 500m cells
-    analysis.gridCells.forEach((cell) => {
-      const coords = cell.geometry.coordinates[0].map(
-        ([lng, lat]) => [lat, lng] as [number, number]
-      );
-      const color = getCellColor(cell, activeLayer);
-
-      const poly = L.polygon(coords, {
-        color: 'rgba(255,255,255,0.35)',
-        weight: 0.8,
-        fillColor: color,
-        fillOpacity: 0.62,
-      });
-
-      poly.bindTooltip(
-        `<div style="font-family:Inter,sans-serif;font-size:12px;line-height:1.45;">
-          <strong>Célula ~500m (${cell.id})</strong><br/>
-          Umidade SMAP: <b>${cell.moisturePct}%</b><br/>
-          MODIS NDVI: <b>${cell.ndvi}</b><br/>
-          Risco Erosão: <b>${cell.erosionRisk}/100</b><br/>
-          ECOSTRESS LST: <b>${cell.surfaceTempC} °C</b>
-        </div>`,
-        { sticky: true }
-      );
-
-      poly.addTo(layer);
-    });
-
-    // Outer Farm Boundary
+    const currentPt = backtestSeries[yearIdx];
+    const fillColor = getPolygonYearColor(currentPt);
     const boundaryCoords = analysis.polygonGeoJson.geometry.coordinates[0].map(
       ([lng, lat]) => [lat, lng] as [number, number]
     );
-    L.polygon(boundaryCoords, {
+
+    const poly = L.polygon(boundaryCoords, {
       color: '#ffffff',
       weight: 2.5,
-      fill: false,
-    }).addTo(layer);
-  }, [analysis, activeLayer]);
+      fillColor,
+      fillOpacity: 0.32,
+    });
 
-  const legend = LAYER_LEGENDS[activeLayer];
+    if (currentPt) {
+      poly.bindTooltip(
+        `<div style="font-family:Inter,sans-serif;font-size:12px;">
+          <strong>${analysis.soil.municipality} (${analysis.areaHa} ha)</strong><br/>
+          Safra ${currentPt.year}: <b>${currentPt.relYieldPct}% do potencial</b><br/>
+          Chuva na safra: ${currentPt.seasonRainMm} mm | ETc: ${currentPt.seasonEtcMm} mm
+        </div>`,
+        { sticky: true }
+      );
+    }
+
+    poly.addTo(layer);
+  }, [analysis, backtestSeries, yearIdx]);
+
+  const currentPt = backtestSeries[yearIdx];
 
   return (
     <div className="map-wrapper">
       <div ref={containerRef} id="farm-leaflet-map" className="leaflet-container-root" />
 
-      {/* Drawing Toolbar Overlay */}
+      {/* Drawing Toolbar */}
       <div className="map-draw-toolbar">
         {!isDrawing ? (
           <>
@@ -334,7 +274,7 @@ export function FarmMap({
               onClick={onStartDrawing}
             >
               <Pencil size={15} />
-              <span>Desenhar Limite da Fazenda</span>
+              <span>Desenhar talhão</span>
             </button>
             {analysis && (
               <button
@@ -350,7 +290,7 @@ export function FarmMap({
           </>
         ) : (
           <div className="draw-active-pill">
-            <span>Clique no mapa para marcar os vértices ({draftPoints.length} pontos)</span>
+            <span>Marque os vértices no mapa ({draftPoints.length} pontos)</span>
             {draftPoints.length >= 3 && (
               <button
                 type="button"
@@ -362,7 +302,7 @@ export function FarmMap({
                 }}
               >
                 <Check size={15} />
-                <span>Concluir Polígono</span>
+                <span>Concluir</span>
               </button>
             )}
             <button
@@ -380,7 +320,7 @@ export function FarmMap({
         )}
       </div>
 
-      {/* Time Travel Bar (2006–2025 Backtest) */}
+      {/* Historical Backtest Scrub Bar */}
       {analysis && backtestSeries.length > 0 && (
         <div className="map-timetravel-card">
           <div className="tt-header">
@@ -388,23 +328,23 @@ export function FarmMap({
               type="button"
               className="tt-play-btn"
               onClick={() => setIsPlaying((p) => !p)}
-              title={isPlaying ? 'Pausar linha do tempo' : 'Reproduzir 20 safras'}
+              title={isPlaying ? 'Pausar' : 'Reproduzir safras'}
             >
               {isPlaying ? <Pause size={13} /> : <Play size={13} />}
             </button>
             <div className="tt-info">
-              <span className="tt-label">Histórico 2006–2025</span>
+              <span className="tt-label">Simulação FAO-56 com POWER diário (2005–2024)</span>
               <div className="tt-status-row">
-                <strong>Safra {backtestSeries[yearIdx]?.year}</strong>
-                <span className={`tt-pill ${backtestSeries[yearIdx]?.status}`}>
-                  {backtestSeries[yearIdx]?.status === 'seca'
+                <strong>Safra {currentPt?.year}</strong>
+                <span className={`tt-pill ${currentPt?.status}`}>
+                  {currentPt?.status === 'seca'
                     ? 'Seca'
-                    : backtestSeries[yearIdx]?.status === 'excesso'
-                      ? 'Chuva Extrema'
+                    : currentPt?.status === 'excesso'
+                      ? 'Chuva extrema'
                       : 'Normal'}
                 </span>
                 <span className="tt-yield">
-                  Rend. Baseline: {backtestSeries[yearIdx]?.relYieldPct}%
+                  Rend. estimado: {currentPt?.relYieldPct}%
                 </span>
               </div>
             </div>
@@ -414,7 +354,7 @@ export function FarmMap({
                 className="tt-cta-btn"
                 onClick={onOpenCropDashboard}
               >
-                <span>Dashboard de Culturas</span>
+                <span>Ver rotações</span>
                 <ArrowRight size={14} />
               </button>
             )}
@@ -433,16 +373,22 @@ export function FarmMap({
         </div>
       )}
 
-      {/* Layer Legend */}
+      {/* Honest Legend */}
       <div className="map-legend-card">
-        <div className="legend-title">{legend.title}</div>
+        <div className="legend-title">Polígono (simulação da safra)</div>
         <div className="legend-stops">
-          {legend.stops.map((stop) => (
-            <div key={stop.label} className="legend-stop">
-              <span className="legend-swatch" style={{ backgroundColor: stop.color }} />
-              <span>{stop.label}</span>
-            </div>
-          ))}
+          <div className="legend-stop">
+            <span className="legend-swatch" style={{ backgroundColor: '#7ed957' }} />
+            <span>Normal</span>
+          </div>
+          <div className="legend-stop">
+            <span className="legend-swatch" style={{ backgroundColor: '#dc2626' }} />
+            <span>Déficit hídrico</span>
+          </div>
+          <div className="legend-stop">
+            <span className="legend-swatch" style={{ backgroundColor: '#004aad' }} />
+            <span>Chuva extrema</span>
+          </div>
         </div>
       </div>
     </div>

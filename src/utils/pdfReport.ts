@@ -1,250 +1,252 @@
 import { jsPDF } from 'jspdf';
-import type { CropId, FarmAnalysis, FarmerPriorities, RotationScenario } from '../types/agro';
-import { CROPS_CATALOG } from '../data/localAgroData';
+import type {
+  CropId,
+  CropInfo,
+  FarmAnalysis,
+  FarmerPriorities,
+  RotationScenario,
+} from '../types/agro';
 
 export function generateAgronomistPdf(
   analysis: FarmAnalysis,
   currentCrop: CropId,
+  cropsCatalog: Record<CropId, CropInfo>,
   priorities: FarmerPriorities,
   scenarios: RotationScenario[]
 ): void {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 15;
+  const margin = 14;
   const contentWidth = pageWidth - margin * 2;
   let y = 16;
 
-  const cropName = CROPS_CATALOG[currentCrop].name;
+  const cropName = cropsCatalog[currentCrop].name;
+  const { indicators, soil } = analysis;
 
-  // Header Banner
+  // Header Banner (#004aad)
   doc.setFillColor(0, 74, 173);
-  doc.rect(0, 0, pageWidth, 28, 'F');
+  doc.rect(0, 0, pageWidth, 26, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(17);
-  doc.text('FIELD SHIFT — Relatório Agronômico de Rotação', margin, 13);
+  doc.setFontSize(15);
+  doc.text('FIELD SHIFT — Relatório para o Agrônomo', margin, 12);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9.5);
+  doc.setFontSize(8.5);
   doc.text(
-    `Apoio à Decisão com Dados NASA (Grade Harmonizada ~500m) | Gerado em: ${analysis.analyzedAt}`,
+    `Equipe Lösungsjäger • NASA Space Apps 2026 (Lajeado, RS) | Gerado em: ${analysis.analyzedAt}`,
     margin,
-    21
+    19.5
   );
 
-  y = 36;
+  y = 33;
 
-  // Farm & Soil Summary Box
-  doc.setFillColor(244, 247, 245);
-  doc.setDrawColor(210, 222, 215);
-  doc.roundedRect(margin, y, contentWidth, 28, 2, 2, 'FD');
+  // 1. Farm & Soil Summary
+  doc.setFillColor(245, 248, 252);
+  doc.setDrawColor(200, 212, 228);
+  doc.roundedRect(margin, y, contentWidth, 27, 1.5, 1.5, 'FD');
 
-  doc.setTextColor(22, 40, 30);
+  doc.setTextColor(15, 31, 56);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text('1. Identificação do Talhão & Solo Local', margin + 4, y + 7);
+  doc.setFontSize(10.5);
+  doc.text('1. Identificação do Talhão e Solo', margin + 4, y + 6.5);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.text(
-    `Localidade: ${analysis.soil.municipality}  |  Área: ${analysis.areaHa} ha  |  Células 500m: ${analysis.gridCells.length}`,
+    `Localidade: ${soil.municipality}  |  Área: ${analysis.areaHa} ha  |  Cultura principal: ${cropName}`,
     margin + 4,
-    y + 13.5
+    y + 12.5
   );
   doc.text(
-    `Coordenadas: ${analysis.centroid[0].toFixed(4)}°, ${analysis.centroid[1].toFixed(4)}°  |  Cultura Atual: ${cropName}`,
+    `Centroide: ${analysis.centroid[0].toFixed(4)}°, ${analysis.centroid[1].toFixed(4)}°  |  Fonte solo: ${soil.dataSourceLabel} (Confiança ${soil.confidenceLevel})`,
     margin + 4,
-    y + 19
+    y + 18
   );
   doc.text(
-    `Solo: ${analysis.soil.soilClass} (${analysis.soil.texture}) | MO: ${analysis.soil.organicMatterPct}% | Retenção: ${analysis.soil.waterRetentionCapacity}`,
+    `Solo: ${soil.soilClass} (${soil.texture}) | MO: ${soil.organicMatterPct}% | AWC: ${soil.availableWaterCapacityMm} mm`,
     margin + 4,
-    y + 24.5
+    y + 23.5
   );
 
-  y += 35;
+  y += 33;
 
-  // NASA Telemetry Section
+  // 2. Measured vs Derived Indicators
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(22, 40, 30);
-  doc.text('2. Médias de Satélite da NASA Extraídas no Polígono (Resolução ~500 m)', margin, y);
-  y += 5;
+  doc.setFontSize(10.5);
+  doc.setTextColor(15, 31, 56);
+  doc.text('2. Indicadores do Talhão (Legenda: Medido vs. Derivado/Estimado)', margin, y);
+  y += 4.5;
+
+  const powerTag =
+    indicators.powerSource === 'live-daily' ? '[MEDIDO - NASA POWER]' : '[ESTIMADO - OFFLINE]';
 
   const metricsRows = [
     [
-      'NASA POWER (Clima)',
-      `Temp. Média: ${analysis.nasa.power.avgTempC} °C | Chuva Anual: ${analysis.nasa.power.annualPrecipMm} mm`,
-      `ET: ${analysis.nasa.power.evapotranspirationMmDay} mm/dia`,
+      'Clima (2005–2024)',
+      `T média: ${indicators.annualAvgTempC} °C | Chuva: ${indicators.annualMeanPrecipMm} mm/ano`,
+      powerTag,
     ],
     [
-      'SMAP (Umidade Solo)',
-      `Umidade Volumétrica: ${analysis.nasa.smap.soilMoisturePct}%`,
-      `Status: ${analysis.nasa.smap.rootZoneStatus}`,
+      'Extremos (Tmin / P95)',
+      `Geada (≤2°C): ${indicators.frostDaysPerYear} d/ano | Chuva P95: ${indicators.extremeRainDaysPerYear} d/ano`,
+      powerTag,
     ],
     [
-      'ECOSTRESS (Superfície)',
-      `Temp. de Superfície (LST): ${analysis.nasa.ecostress.surfaceTempC} °C`,
-      `Estresse Térmico: ${analysis.nasa.ecostress.heatStressDays} dias/ano`,
+      'ET₀ e Déficit Hídrico',
+      `ET₀ média: ${indicators.meanEt0MmDay} mm/dia | Déficit sazonal: ${indicators.seasonalWaterDeficitMm} mm`,
+      '[DERIVADO - HARGREAVES]',
     ],
     [
-      'GPM IMERG (Chuva)',
-      `Acumulado 90 dias: ${analysis.nasa.gpm.accumulatedRain90dMm} mm`,
-      `Anomalia: ${analysis.nasa.gpm.rainAnomalyPct}%`,
-    ],
-    [
-      'MODIS (Vegetação)',
-      `NDVI Médio: ${analysis.nasa.modis.meanNdvi}`,
-      `Solo Exposto: ${analysis.nasa.modis.bareSoilMonths}`,
-    ],
-    [
-      'Risco de Erosão (USLE)',
-      `Índice Calculado: ${analysis.nasa.erosion.riskIndex} / 100`,
-      `Nível: ${analysis.nasa.erosion.riskLevel}`,
+      'Risco de Erosão',
+      `Índice: ${indicators.estimatedErosionIndex} / 100 (${indicators.erosionLevel})`,
+      '[DERIVADO - SOLO + CHUVA]',
     ],
   ];
 
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.2);
   metricsRows.forEach((row, idx) => {
-    const rowY = y + idx * 6.8;
+    const rowY = y + idx * 6.5;
     if (idx % 2 === 0) {
-      doc.setFillColor(248, 250, 249);
-      doc.rect(margin, rowY, contentWidth, 6.8, 'F');
+      doc.setFillColor(245, 248, 252);
+      doc.rect(margin, rowY, contentWidth, 6.5, 'F');
     }
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 58, 42);
-    doc.text(row[0], margin + 2, rowY + 4.7);
+    doc.setTextColor(0, 74, 173);
+    doc.text(row[0], margin + 2, rowY + 4.5);
 
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(50, 60, 55);
-    doc.text(row[1], margin + 45, rowY + 4.7);
-    doc.text(row[2], margin + 128, rowY + 4.7);
+    doc.setTextColor(35, 45, 60);
+    doc.text(row[1], margin + 40, rowY + 4.5);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(80, 95, 115);
+    doc.text(row[2], margin + 132, rowY + 4.5);
   });
 
-  y += metricsRows.length * 6.8 + 8;
+  y += metricsRows.length * 6.5 + 7;
 
-  // Comparison Vector Chart
+  // 3. Comparison Chart
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(22, 40, 30);
-  doc.text('3. Comparativo Gráfico dos 3 Cenários de Rotação (Score 0–100)', margin, y);
-  y += 5;
+  doc.setFontSize(10.5);
+  doc.setTextColor(15, 31, 56);
+  doc.text('3. Comparativo das 4 Rotações (Índices 0–100)', margin, y);
+  y += 4.5;
 
-  const chartHeight = 36;
-  doc.setFillColor(250, 251, 250);
-  doc.setDrawColor(220, 228, 223);
-  doc.roundedRect(margin, y, contentWidth, chartHeight, 2, 2, 'FD');
+  const chartHeight = 42;
+  doc.setFillColor(250, 252, 255);
+  doc.setDrawColor(213, 223, 236);
+  doc.roundedRect(margin, y, contentWidth, chartHeight, 1.5, 1.5, 'FD');
 
   const barColors: [number, number, number][] = [
-    [37, 99, 235],   // Água (Azul)
-    [217, 119, 6],   // Renda (Âmbar)
-    [22, 163, 74],   // Solo (Verde)
+    [0, 74, 173],    // Água
+    [217, 119, 6],   // Rendimento
+    [126, 217, 87],  // Solo
   ];
 
-  // Legend
-  doc.setFontSize(8);
-  const legends = ['Uso de Água', 'Potencial de Renda', 'Benefício ao Solo'];
+  doc.setFontSize(7.8);
+  const legends = ['Uso de Água', 'Potencial de Rendimento', 'Benefício ao Solo'];
   legends.forEach((label, i) => {
-    const lx = margin + 6 + i * 52;
+    const lx = margin + 6 + i * 54;
     doc.setFillColor(...barColors[i]);
-    doc.rect(lx, y + 3.5, 3.5, 3.5, 'F');
-    doc.setTextColor(50, 60, 55);
-    doc.text(label, lx + 5, y + 6.3);
+    doc.rect(lx, y + 3.2, 3.2, 3.2, 'F');
+    doc.setTextColor(40, 50, 65);
+    doc.text(label, lx + 4.5, y + 5.8);
   });
 
-  // Bars per scenario
   scenarios.forEach((sc, idx) => {
-    const rowY = y + 11 + idx * 8;
+    const rowY = y + 10.5 + idx * 7.5;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(22, 40, 30);
-    const shortTitle =
-      sc.id === 'baseline'
-        ? '1. Rotação Atual'
-        : sc.id === 'cover-legume'
-          ? '2. Cobertura + Legum.'
-          : '3. Tolerante à Seca';
-    doc.text(shortTitle, margin + 4, rowY + 4.2);
+    doc.setFontSize(7.8);
+    doc.setTextColor(15, 31, 56);
+    doc.text(sc.title.slice(0, 24), margin + 4, rowY + 4);
 
-    const vals = [sc.scores.waterUse, sc.scores.yieldPotential, sc.scores.soilBenefit];
+    const vals = [sc.scores.waterIndex, sc.scores.yieldIndex, sc.scores.soilIndex];
     vals.forEach((val, bIdx) => {
-      const bx = margin + 46 + bIdx * 43;
-      const maxBarW = 30;
-      doc.setFillColor(232, 236, 234);
-      doc.rect(bx, rowY + 1, maxBarW, 4, 'F');
+      const bx = margin + 48 + bIdx * 43;
+      const maxBarW = 28;
+      doc.setFillColor(229, 235, 242);
+      doc.rect(bx, rowY + 1, maxBarW, 3.8, 'F');
       doc.setFillColor(...barColors[bIdx]);
-      doc.rect(bx, rowY + 1, (val / 100) * maxBarW, 4, 'F');
+      doc.rect(bx, rowY + 1, (val / 100) * maxBarW, 3.8, 'F');
       doc.setFont('helvetica', 'normal');
-      doc.setTextColor(40, 50, 45);
-      doc.text(`${val}`, bx + maxBarW + 1.5, rowY + 4.2);
+      doc.setTextColor(40, 50, 65);
+      doc.text(`${val}`, bx + maxBarW + 1.5, rowY + 4);
     });
   });
 
-  y += chartHeight + 8;
+  y += chartHeight + 7;
 
-  // Scenario Details
+  // 4. Scenarios, Gaps & Agronomist Notes
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(22, 40, 30);
-  doc.text('4. Recomendações e Pontos de Validação para o Agrônomo', margin, y);
-  y += 5;
+  doc.setFontSize(10.5);
+  doc.setTextColor(15, 31, 56);
+  doc.text('4. Resultados FAO-56, Lacunas de Dados e Revisão Agronômica', margin, y);
+  y += 4.5;
 
   scenarios.forEach((sc) => {
-    if (y > 248) {
+    if (y > 242) {
       doc.addPage();
-      y = 18;
+      y = 16;
     }
 
-    const boxH = 38;
-    doc.setDrawColor(sc.recommended ? 22 : 205, sc.recommended ? 163 : 215, sc.recommended ? 74 : 210);
-    doc.setFillColor(sc.recommended ? 242 : 252, sc.recommended ? 250 : 253, sc.recommended ? 245 : 252);
-    doc.roundedRect(margin, y, contentWidth, boxH, 2, 2, 'FD');
+    const boxH = 34;
+    doc.setDrawColor(sc.recommended ? 0 : 205, sc.recommended ? 74 : 215, sc.recommended ? 173 : 225);
+    doc.setFillColor(sc.recommended ? 245 : 252, sc.recommended ? 249 : 253, 255);
+    doc.roundedRect(margin, y, contentWidth, boxH, 1.5, 1.5, 'FD');
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.setTextColor(20, 45, 30);
-    const titleLine = `${sc.title} (${sc.subtitle}) — Score: ${sc.scores.overall}/100${
-      sc.recommended ? ' [RECOMENDADO]' : ''
-    }`;
-    doc.text(titleLine, margin + 3.5, y + 6);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(21, 101, 52);
+    doc.setFontSize(9);
+    doc.setTextColor(15, 31, 56);
     doc.text(
-      `Backtest 20 safras: P10=${sc.backtest.p10YieldPct}% | P50=${sc.backtest.p50YieldPct}% | P90=${sc.backtest.p90YieldPct}% | Risco quebra=${sc.backtest.failureRiskPct}% | Água poupada=${sc.impact.waterSavedM3Ha} m³/ha | N=${sc.impact.nitrogenFixedKgHa}`,
+      `${sc.title} (${sc.subtitle}) — Índice: ${sc.scores.overall}/100${
+        sc.recommended ? ' [MAIOR SCORE]' : ''
+      }`,
       margin + 3.5,
-      y + 11.2
+      y + 5.5
+    );
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.8);
+    doc.setTextColor(0, 74, 173);
+    doc.text(
+      `Backtest 2005–2024: P10=${sc.backtest.p10YieldPct}% | P50=${sc.backtest.p50YieldPct}% | P90=${sc.backtest.p90YieldPct}% | Quebra=${sc.backtest.failureRiskPct}% | ETc poupada=${sc.impact.waterSavedM3Ha} m³/ha | N=${sc.impact.nitrogenFixedKgHa}`,
+      margin + 3.5,
+      y + 10.8
     );
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.2);
-    doc.setTextColor(55, 65, 60);
-    const summaryLines = doc.splitTextToSize(sc.summary, contentWidth - 7);
-    doc.text(summaryLines.slice(0, 2), margin + 3.5, y + 16.5);
+    doc.setFontSize(7.8);
+    doc.setTextColor(50, 60, 75);
+    const gapText = `Lacunas: ${sc.dataGaps.join(' ; ')}`;
+    const gapLines = doc.splitTextToSize(gapText, contentWidth - 7);
+    doc.text(gapLines.slice(0, 2), margin + 3.5, y + 16);
 
     doc.setFont('helvetica', 'italic');
-    doc.setTextColor(95, 70, 30);
-    const noteLines = doc.splitTextToSize(`Validação agronômica: ${sc.agronomistNotes}`, contentWidth - 7);
-    doc.text(noteLines.slice(0, 2), margin + 3.5, y + 27.5);
+    doc.setTextColor(110, 65, 15);
+    const noteLines = doc.splitTextToSize(`Agrônomo: ${sc.agronomistNotes}`, contentWidth - 7);
+    doc.text(noteLines.slice(0, 2), margin + 3.5, y + 25.5);
 
-    y += boxH + 4;
+    y += boxH + 3.5;
   });
 
-  // Footer Disclaimer
+  // Footer
   if (y > 268) {
     doc.addPage();
     y = 20;
   }
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.8);
-  doc.setTextColor(110, 118, 114);
-  const priorityText = `Prioridades informadas: Água (${priorities.lessWater}%), Renda (${priorities.moreIncome}%), Solo (${priorities.improveSoil}%), Erosão (${priorities.reduceErosion}%).`;
-  doc.text(priorityText, margin, y + 4);
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 110, 125);
   doc.text(
-    'Nota: Esta ferramenta apoia a decisão estratégica com dados NASA Space Apps 2026 e não substitui análise laboratorial de solo nem laudo do engenheiro agrônomo.',
+    `Pesos informados: Água (${priorities.lessWater}%), Renda (${priorities.moreIncome}%), Solo (${priorities.improveSoil}%), Erosão (${priorities.reduceErosion}%).`,
     margin,
-    y + 9
+    y + 3
+  );
+  doc.text(
+    'Ferramenta de apoio à decisão (Equipe Lösungsjäger • NASA Space Apps 2026). Não substitui análise de solo nem recomendação agronômica.',
+    margin,
+    y + 7.5
   );
 
-  doc.save(`Relatorio_FieldShift_${analysis.soil.municipality.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+  doc.save(`Relatorio_FieldShift_${soil.municipality.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
 }

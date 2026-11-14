@@ -1,93 +1,153 @@
 import * as turf from '@turf/turf';
-import type { FarmAnalysis, GridCell500m, LocalSoilProfile, NasaMetrics } from '../types/agro';
+import type {
+  CmrGranuleSummary,
+  DailyClimateDay,
+  FarmAnalysis,
+  FieldIndicators,
+  LocalSoilProfile,
+} from '../types/agro';
 import { resolveLocalSoil } from '../data/localAgroData';
 
-interface PowerClimatologyResponse {
+interface PowerDailyResponse {
   properties?: {
     parameter?: {
       T2M?: Record<string, number>;
+      T2M_MIN?: Record<string, number>;
       PRECTOTCORR?: Record<string, number>;
-      EVPTRNS?: Record<string, number>;
+      ALLSKY_SFC_SW_DWN?: Record<string, number>;
     };
   };
 }
 
-function seededNoise(lng: number, lat: number, salt: number): number {
-  const x = Math.sin(lng * 127.1 + lat * 311.7 + salt * 74.7) * 43758.5453;
-  return x - Math.floor(x);
+interface CmrSearchResponse {
+  feed?: {
+    entry?: { time_start?: string }[];
+  };
 }
 
 function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
 
-async function fetchNasaPower(lat: number, lng: number): Promise<{
-  sourceMode: 'live-power' | 'hybrid-cache';
-  avgTempC: number;
-  annualPrecipMm: number;
-  evapotranspirationMmDay: number;
-}> {
+function estimateDailyEt0(t2m: number, tMin: number, solarMjM2Day: number): number {
+  // Hargreaves / radiation-based daily ET0 approximation (mm/day)
+  const rad = solarMjM2Day > 0 && solarMjM2Day < 45 ? solarMjM2Day : 16.5;
+  const dT = Math.max(2, (t2m - tMin) * 2);
+  const et0 = 0.0023 * (t2m + 17.8) * Math.sqrt(dT) * (rad * 0.408) * 0.48;
+  return Number(clamp(et0, 0.8, 9.5).toFixed(2));
+}
+
+async function fetchNasaPowerDaily(
+  lat: number,
+  lng: number
+): Promise<{ source: 'live-daily' | 'offline-fallback'; days: DailyClimateDay[] }> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 4500);
+  const timeoutId = setTimeout(() => controller.abort(), 9000);
 
   try {
-    const url = `https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=T2M,PRECTOTCORR,EVPTRNS&community=AG&longitude=${lng.toFixed(
+    const url = `https://power.larc.nasa.gov/api/temporal/daily/point?parameters=T2M,T2M_MIN,PRECTOTCORR,ALLSKY_SFC_SW_DWN&community=AG&longitude=${lng.toFixed(
       4
-    )}&latitude=${lat.toFixed(4)}&format=JSON`;
+    )}&latitude=${lat.toFixed(4)}&start=20050101&end=20241231&format=JSON`;
 
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
-
     if (!res.ok) throw new Error(`NASA POWER HTTP ${res.status}`);
 
-    const data: PowerClimatologyResponse = await res.json();
-    const params = data.properties?.parameter;
+    const json: PowerDailyResponse = await res.json();
+    const p = json.properties?.parameter;
+    if (!p?.T2M || !p?.PRECTOTCORR) throw new Error('Missing POWER daily parameters');
 
-    if (!params?.T2M?.ANN || !params?.PRECTOTCORR?.ANN) {
-      throw new Error('Incomplete NASA POWER payload');
+    const days: DailyClimateDay[] = [];
+    for (const date of Object.keys(p.T2M)) {
+      const t2m = p.T2M[date];
+      const tMin = p.T2M_MIN?.[date] ?? t2m - 4;
+      const precip = p.PRECTOTCORR[date];
+      const solar = p.ALLSKY_SFC_SW_DWN?.[date] ?? 16.5;
+
+      // Filter NASA POWER fill values (-999)
+      if (t2m < -80 || precip < 0) continue;
+
+      const year = Number(date.slice(0, 4));
+      const month = Number(date.slice(4, 6));
+      days.push({
+        date,
+        year,
+        month,
+        t2m,
+        t2mMin: tMin > -80 ? tMin : t2m - 4,
+        precipMm: precip,
+        et0Mm: estimateDailyEt0(t2m, tMin > -80 ? tMin : t2m - 4, solar),
+      });
     }
 
-    const avgTempC = Number(params.T2M.ANN.toFixed(1));
-    const precipMmDay =
-      params.PRECTOTCORR.ANN > 25 ? params.PRECTOTCORR.ANN / 365 : params.PRECTOTCORR.ANN;
-    const annualPrecipMm = Math.round(precipMmDay * 365);
-
-    const etRaw = params.EVPTRNS?.ANN;
-    const evapotranspirationMmDay =
-      etRaw && etRaw > 0 && etRaw < 15
-        ? Number(etRaw.toFixed(2))
-        : Number((avgTempC * 0.17).toFixed(2));
-
-    return {
-      sourceMode: 'live-power',
-      avgTempC,
-      annualPrecipMm,
-      evapotranspirationMmDay,
-    };
+    if (days.length < 365) throw new Error('Insufficient POWER daily records');
+    return { source: 'live-daily', days };
   } catch {
     clearTimeout(timeoutId);
+    // Honest offline fallback (explicitly labeled as offline-fallback in UI)
     const absLat = Math.abs(lat);
-    const isSemiArid = absLat >= 7 && absLat <= 16 && lng > -45 && lng < -35;
-    const avgTempC = isSemiArid ? 27.4 : clamp(29.5 - absLat * 0.35, 10, 29);
-    const annualPrecipMm = isSemiArid ? 540 : absLat < 15 ? 1850 : absLat > 35 ? 880 : 1580;
-    const evapotranspirationMmDay = Number((avgTempC * 0.17).toFixed(2));
+    const baseTemp = clamp(28 - absLat * 0.32, 11, 28);
+    const baseRainPerDay = absLat < 15 ? 4.8 : absLat > 35 ? 2.4 : 4.2;
+    const days: DailyClimateDay[] = [];
 
-    return {
-      sourceMode: 'hybrid-cache',
-      avgTempC: Number(avgTempC.toFixed(1)),
-      annualPrecipMm,
-      evapotranspirationMmDay,
-    };
+    for (let y = 2005; y <= 2024; y++) {
+      for (let m = 1; m <= 12; m++) {
+        for (let d = 1; d <= 28; d++) {
+          const seasonal = Math.sin(((m - 1) / 12) * Math.PI * 2) * (lat < 0 ? 4.5 : -4.5);
+          const t2m = Number((baseTemp + seasonal).toFixed(1));
+          const tMin = Number((t2m - 5.5).toFixed(1));
+          const precipMm = d % 4 === 0 ? Number((baseRainPerDay * 3.8).toFixed(1)) : 0;
+          days.push({
+            date: `${y}${String(m).padStart(2, '0')}${String(d).padStart(2, '0')}`,
+            year: y,
+            month: m,
+            t2m,
+            t2mMin: tMin,
+            precipMm,
+            et0Mm: estimateDailyEt0(t2m, tMin, 16),
+          });
+        }
+      }
+    }
+    return { source: 'offline-fallback', days };
   }
 }
 
-function buildMonthlyNdvi(meanNdvi: number, lat: number): number[] {
-  // Southern vs Northern hemisphere growing season curve
-  const southPattern = [0.76, 0.81, 0.72, 0.44, 0.26, 0.24, 0.28, 0.31, 0.38, 0.56, 0.68, 0.74];
-  const northPattern = [0.22, 0.23, 0.3, 0.45, 0.64, 0.78, 0.84, 0.79, 0.61, 0.38, 0.25, 0.22];
-  const base = lat < 0 ? southPattern : northPattern;
-  const scale = meanNdvi / 0.5;
-  return base.map((v) => Number(clamp(v * scale, 0.16, 0.89).toFixed(2)));
+async function queryCmrGranule(
+  dataset: string,
+  shortName: string,
+  bbox: [number, number, number, number]
+): Promise<CmrGranuleSummary> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4500);
+  try {
+    const [w, s, e, n] = bbox;
+    const url = `https://cmr.earthdata.nasa.gov/search/granules.json?short_name=${shortName}&bounding_box=${w.toFixed(
+      3
+    )},${s.toFixed(3)},${e.toFixed(3)},${n.toFixed(3)}&page_size=5&sort_key=-start_date`;
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error('CMR error');
+    const totalHits = Number(res.headers.get('CMR-Hits') ?? '0');
+    const data: CmrSearchResponse = await res.json();
+    const latest = data.feed?.entry?.[0]?.time_start?.slice(0, 10) ?? null;
+    return {
+      dataset,
+      shortName,
+      granuleCount: totalHits || (data.feed?.entry?.length ?? 0),
+      latestDate: latest,
+      status: 'ok',
+    };
+  } catch {
+    clearTimeout(timeoutId);
+    return {
+      dataset,
+      shortName,
+      granuleCount: 0,
+      latestDate: null,
+      status: 'offline',
+    };
+  }
 }
 
 export async function analyzeFarmPolygon(
@@ -105,149 +165,69 @@ export async function analyzeFarmPolygon(
   const areaHa = Math.max(1, Math.round(areaM2 / 10000));
   const centroidFeat = turf.centroid(polygonGeoJson);
   const [centLng, centLat] = centroidFeat.geometry.coordinates;
+  const bbox = turf.bbox(polygonGeoJson) as [number, number, number, number];
 
-  const [powerBase, soil] = await Promise.all([
-    fetchNasaPower(centLat, centLng),
+  const [powerRes, soil, smapCmr, ecoCmr, srtmCmr] = await Promise.all([
+    fetchNasaPowerDaily(centLat, centLng),
     Promise.resolve<LocalSoilProfile>(resolveLocalSoil(centLat, centLng)),
+    queryCmrGranule('SMAP L4 Zona Radicular', 'SPL4SMGP', bbox),
+    queryCmrGranule('ECOSTRESS LST 70m', 'ECO_L2T_LSTE', bbox),
+    queryCmrGranule('SRTM Elevação 30m', 'SRTMGL1', bbox),
   ]);
 
-  const seasonEvapMm = Math.round(powerBase.evapotranspirationMmDay * 120);
-  const seasonRainMm = Math.round(powerBase.annualPrecipMm * 0.36);
-  const waterDeficitMmSeason = Math.max(0, seasonEvapMm - seasonRainMm);
+  const days = powerRes.days;
+  const yearsCount = Math.max(1, new Set(days.map((d) => d.year)).size);
 
-  const retentionFactor =
-    soil.waterRetentionCapacity === 'Alta'
-      ? 6
-      : soil.waterRetentionCapacity === 'Média'
-        ? 0
-        : -6;
+  const totalTemp = days.reduce((s, d) => s + d.t2m, 0);
+  const totalPrecip = days.reduce((s, d) => s + d.precipMm, 0);
+  const totalEt0 = days.reduce((s, d) => s + d.et0Mm, 0);
 
-  const baseMoisture = clamp(
-    18 + (powerBase.annualPrecipMm - 600) / 85 + retentionFactor,
-    8,
-    42
+  const annualAvgTempC = Number((totalTemp / days.length).toFixed(1));
+  const annualMeanPrecipMm = Math.round(totalPrecip / yearsCount);
+  const meanEt0MmDay = Number((totalEt0 / days.length).toFixed(2));
+
+  // Real frost days count (T2M_MIN <= 2.0 °C)
+  const frostTotal = days.filter((d) => d.t2mMin <= 2.0).length;
+  const frostDaysPerYear = Number((frostTotal / yearsCount).toFixed(1));
+
+  // Real P95 extreme rain threshold from rainy days (> 1 mm)
+  const rainyDays = days.filter((d) => d.precipMm > 1).map((d) => d.precipMm).sort((a, b) => a - b);
+  const p95Threshold = rainyDays.length > 0 ? rainyDays[Math.floor(rainyDays.length * 0.95)] : 35;
+  const extremeTotal = days.filter((d) => d.precipMm >= p95Threshold).length;
+  const extremeRainDaysPerYear = Number((extremeTotal / yearsCount).toFixed(1));
+
+  const seasonEt0 = meanEt0MmDay * 120;
+  const seasonPrecip = annualMeanPrecipMm * 0.42;
+  const seasonalWaterDeficitMm = Math.max(0, Math.round(seasonEt0 - seasonPrecip));
+
+  const soilErosionBase =
+    soil.erosionSusceptibility === 'Alta' ? 35 : soil.erosionSusceptibility === 'Moderada' ? 20 : 10;
+  const estimatedErosionIndex = Math.round(
+    clamp(soilErosionBase + extremeRainDaysPerYear * 2.2 + annualMeanPrecipMm / 85, 10, 92)
   );
-  const baseLst = Number(
-    clamp(powerBase.avgTempC + (32 - baseMoisture) * 0.38, 18, 45).toFixed(1)
-  );
-  const baseNdvi = Number(
-    clamp(0.32 + (baseMoisture - 10) * 0.015, 0.22, 0.84).toFixed(2)
-  );
 
-  // Build harmonized 500m grid inside the polygon
-  const bbox = turf.bbox(polygonGeoJson);
-  let cellSideKm = 0.5;
-  if (areaHa > 15000) cellSideKm = 1.5;
-  else if (areaHa > 5000) cellSideKm = 1.0;
-
-  const rawGrid = turf.squareGrid(bbox, cellSideKm, { units: 'kilometers' });
-  let intersecting = rawGrid.features.filter((cell) =>
-    turf.booleanIntersects(cell, polygonGeoJson)
-  );
-  if (intersecting.length === 0) {
-    intersecting = [polygonGeoJson];
-  }
-
-  const erosionSoilBase =
-    soil.erosionSusceptibility === 'Alta'
-      ? 26
-      : soil.erosionSusceptibility === 'Moderada'
-        ? 15
-        : 7;
-
-  const gridCells: GridCell500m[] = intersecting.slice(0, 180).map((cell, idx) => {
-    const c = turf.centroid(cell).geometry.coordinates as [number, number];
-    const n1 = seededNoise(c[0], c[1], 1) - 0.5;
-    const n2 = seededNoise(c[0], c[1], 2) - 0.5;
-    const n3 = seededNoise(c[0], c[1], 3) - 0.5;
-
-    const moisturePct = Number(clamp(baseMoisture + n1 * 9.5, 6, 46).toFixed(1));
-    const ndvi = Number(clamp(baseNdvi + n2 * 0.22 - n1 * 0.04, 0.16, 0.89).toFixed(2));
-    const surfaceTempC = Number(
-      clamp(baseLst - n1 * 3.4 + n3 * 2.8, 16, 48).toFixed(1)
-    );
-
-    const rainFactor = clamp(powerBase.annualPrecipMm / 65, 8, 36);
-    const bareFactor = (1 - ndvi) * 45;
-    const erosionRisk = Math.round(
-      clamp(erosionSoilBase + rainFactor + bareFactor + n3 * 12, 8, 95)
-    );
-
-    return {
-      id: `cell-${idx}`,
-      geometry: cell.geometry,
-      center: c,
-      moisturePct,
-      ndvi,
-      erosionRisk,
-      surfaceTempC,
-    };
-  });
-
-  const avg = (fn: (c: GridCell500m) => number) =>
-    gridCells.reduce((acc, c) => acc + fn(c), 0) / gridCells.length;
-
-  const meanMoisture = Number(avg((c) => c.moisturePct).toFixed(1));
-  const meanNdvi = Number(avg((c) => c.ndvi).toFixed(2));
-  const meanLst = Number(avg((c) => c.surfaceTempC).toFixed(1));
-  const meanErosion = Math.round(avg((c) => c.erosionRisk));
-
-  const absLat = Math.abs(centLat);
-  const frostRiskDays = absLat > 26 ? 14 : absLat > 20 ? 4 : 0;
-  const extremeRainDays = powerBase.annualPrecipMm > 1400 ? 11 : 4;
-  const moistureAnomalyPct = Number(((meanMoisture - 22) * 1.4).toFixed(0));
-
-  const nasa: NasaMetrics = {
-    sourceMode: powerBase.sourceMode,
-    power: {
-      avgTempC: powerBase.avgTempC,
-      annualPrecipMm: powerBase.annualPrecipMm,
-      evapotranspirationMmDay: powerBase.evapotranspirationMmDay,
-      waterDeficitMmSeason,
-      frostRiskDays,
-      extremeRainDays,
-    },
-    smap: {
-      soilMoisturePct: meanMoisture,
-      moistureAnomalyPct,
-      rootZoneStatus:
-        meanMoisture < 17 ? 'Seco' : meanMoisture < 27 ? 'Adequado' : 'Úmido',
-    },
-    ecostress: {
-      surfaceTempC: meanLst,
-      heatStressDays: meanLst > 34 ? 42 : meanLst > 30 ? 21 : 7,
-    },
-    gpm: {
-      accumulatedRain90dMm: Math.round(powerBase.annualPrecipMm * 0.27),
-      rainAnomalyPct: powerBase.annualPrecipMm < 900 ? -18 : -6,
-    },
-    modis: {
-      meanNdvi,
-      bareSoilMonths: meanNdvi < 0.45 ? 'Mai–Set (5 meses)' : 'Jun–Ago (3 meses)',
-      monthlyNdvi: buildMonthlyNdvi(meanNdvi, centLat),
-    },
-    erosion: {
-      riskIndex: meanErosion,
-      riskLevel:
-        meanErosion >= 60 ? 'Alto' : meanErosion >= 35 ? 'Moderado' : 'Baixo',
-    },
+  const indicators: FieldIndicators = {
+    powerSource: powerRes.source,
+    powerPeriod: '2005–2024 (série diária)',
+    annualAvgTempC,
+    annualMeanPrecipMm,
+    meanEt0MmDay,
+    frostDaysPerYear,
+    extremeRainDaysPerYear,
+    seasonalWaterDeficitMm,
+    estimatedErosionIndex,
+    erosionLevel:
+      estimatedErosionIndex >= 60 ? 'Alto' : estimatedErosionIndex >= 35 ? 'Moderado' : 'Baixo',
+    cmrGranules: [smapCmr, ecoCmr, srtmCmr],
   };
-
-  const detectedCropHistory =
-    soil.countryCode === 'US'
-      ? 'Histórico detectado via USDA CDL: Milho / Soja nos últimos 4 anos'
-      : soil.countryCode === 'BR'
-        ? 'Histórico detectado via MapBiomas: Soja (verão) + entressafra nos últimos 4 anos'
-        : 'Histórico detectado via ESA WorldCover: Cultivo anual de sequeiro';
 
   return {
     polygonGeoJson,
     areaHa,
     centroid: [centLat, centLng],
-    gridCells,
-    nasa,
+    dailyClimate: days,
+    indicators,
     soil,
-    detectedCropHistory,
     analyzedAt: new Date().toLocaleString('pt-BR'),
   };
 }

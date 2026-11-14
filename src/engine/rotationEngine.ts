@@ -1,112 +1,129 @@
-import { CROPS_CATALOG } from '../data/localAgroData';
 import type {
   BacktestYearPoint,
   ClimateStressScenario,
   CropId,
+  CropInfo,
+  DailyClimateDay,
   FarmAnalysis,
+  FarmerConstraints,
   FarmerPriorities,
   RotationScenario,
+  SensitivityResult,
 } from '../types/agro';
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
 
-function clampScore(v: number): number {
-  return Math.round(clamp(v, 18, 98));
-}
-
 function computeOverall(
-  waterUse: number,
-  yieldPotential: number,
-  soilBenefit: number,
+  waterIndex: number,
+  yieldIndex: number,
+  soilIndex: number,
   priorities: FarmerPriorities
 ): number {
   const wWater = Math.max(5, priorities.lessWater);
   const wIncome = Math.max(5, priorities.moreIncome);
   const wSoil = Math.max(5, priorities.improveSoil + priorities.reduceErosion * 0.6);
   const total = wWater + wIncome + wSoil;
-
   return Math.round(
-    (waterUse * wWater + yieldPotential * wIncome + soilBenefit * wSoil) / total
+    (waterIndex * wWater + yieldIndex * wIncome + soilIndex * wSoil) / total
   );
 }
 
-// Deterministic 20-year climate anomaly series (2006–2025) including 2021-2022 drought & 2024 extreme rain
-const HISTORICAL_RAIN_ANOMALY: { year: number; rainFactor: number; tempOffset: number }[] = [
-  { year: 2006, rainFactor: 0.96, tempOffset: 0.1 },
-  { year: 2007, rainFactor: 1.04, tempOffset: -0.1 },
-  { year: 2008, rainFactor: 0.91, tempOffset: 0.2 },
-  { year: 2009, rainFactor: 1.12, tempOffset: -0.2 },
-  { year: 2010, rainFactor: 0.98, tempOffset: 0.3 },
-  { year: 2011, rainFactor: 0.86, tempOffset: 0.4 },
-  { year: 2012, rainFactor: 0.74, tempOffset: 0.9 },
-  { year: 2013, rainFactor: 1.05, tempOffset: 0.0 },
-  { year: 2014, rainFactor: 0.92, tempOffset: 0.4 },
-  { year: 2015, rainFactor: 1.14, tempOffset: 0.3 },
-  { year: 2016, rainFactor: 0.97, tempOffset: 0.2 },
-  { year: 2017, rainFactor: 1.03, tempOffset: 0.1 },
-  { year: 2018, rainFactor: 0.89, tempOffset: 0.5 },
-  { year: 2019, rainFactor: 0.94, tempOffset: 0.6 },
-  { year: 2020, rainFactor: 0.79, tempOffset: 0.8 },
-  { year: 2021, rainFactor: 0.68, tempOffset: 1.1 }, // La Niña severe drought
-  { year: 2022, rainFactor: 0.64, tempOffset: 1.3 }, // Historic drought
-  { year: 2023, rainFactor: 1.08, tempOffset: 0.7 },
-  { year: 2024, rainFactor: 1.36, tempOffset: 0.9 }, // El Niño extreme rainfall / flood
-  { year: 2025, rainFactor: 0.93, tempOffset: 0.8 },
-];
-
-function runFaoBacktest(
-  baseSeasonRainMm: number,
-  baseSeasonEt0Mm: number,
+function simulateDailyBucketBacktest(
+  dailyClimate: DailyClimateDay[],
+  lat: number,
   awcMm: number,
   kc: number,
   ky: number,
-  droughtResilienceBonus: number,
-  excessRainToleranceBonus: number,
-  stress: ClimateStressScenario
+  cycleDays: number,
+  excessRainTolerance: number,
+  stress: ClimateStressScenario,
+  hasIrrigation: boolean
 ) {
   const rainMult = 1 + stress.rainDeltaPct / 100;
-  const etTempMult = 1 + stress.tempDeltaC * 0.045;
+  const etMult = 1 + stress.tempDeltaC * 0.045;
 
-  const series: BacktestYearPoint[] = HISTORICAL_RAIN_ANOMALY.map((h) => {
-    const rain = baseSeasonRainMm * h.rainFactor * rainMult;
-    const et0 = baseSeasonEt0Mm * (1 + h.tempOffset * 0.03) * etTempMult;
-    const etc = et0 * kc;
+  // Group daily records by year and filter main growing season months
+  const byYear = new Map<number, DailyClimateDay[]>();
+  for (const d of dailyClimate) {
+    // Southern hemisphere main summer-autumn window (Oct-Mar) vs Northern (Apr-Sep)
+    const inSeason = lat < 0 ? d.month >= 10 || d.month <= 3 : d.month >= 4 && d.month <= 9;
+    if (!inSeason) continue;
+    const arr = byYear.get(d.year) ?? [];
+    arr.push(d);
+    byYear.set(d.year, arr);
+  }
 
-    // FAO-56 simplified bucket: available water = rain + soil AWC buffer
-    const availableWater = rain + awcMm * (0.85 + droughtResilienceBonus * 0.25);
-    const etaRatio = clamp(availableWater / Math.max(1, etc), 0.35, 1.0);
+  const series: BacktestYearPoint[] = [];
+  let totalEtcMm = 0;
 
-    // FAO-33 yield response: Yr = 1 - Ky * (1 - ETa/ETc)
-    let relYield = 1 - ky * (1 - etaRatio);
+  for (const [year, yearDays] of Array.from(byYear.entries()).sort((a, b) => a[0] - b[0])) {
+    const slice = yearDays.slice(0, Math.min(yearDays.length, cycleDays));
+    if (slice.length < 30) continue;
 
-    // Excess rain / waterlogging & erosion penalty
-    let status: BacktestYearPoint['status'] = 'normal';
-    if (h.rainFactor * rainMult < 0.82) {
-      status = 'seca';
-    } else if (h.rainFactor * rainMult > 1.24) {
-      status = 'excesso';
-      const excessPenalty = Math.max(0, 0.16 - excessRainToleranceBonus * 0.11);
-      relYield -= excessPenalty;
+    let soilWater = awcMm * 0.65;
+    let sumEtc = 0;
+    let sumEta = 0;
+    let sumRain = 0;
+    let heavyRainDays = 0;
+
+    for (const day of slice) {
+      const rain = day.precipMm * rainMult;
+      const etc = day.et0Mm * etMult * kc;
+      sumRain += rain;
+      sumEtc += etc;
+      if (rain >= 40) heavyRainDays++;
+
+      soilWater = Math.min(awcMm, soilWater + rain * 0.88);
+      if (hasIrrigation && soilWater < awcMm * 0.35) {
+        soilWater = awcMm * 0.6; // Supplemental irrigation prevents severe wilt
+      }
+
+      // FAO-56 stress coefficient Ks when soil moisture drops below 45% of AWC
+      const readilyAvailable = awcMm * 0.45;
+      const ks = soilWater >= readilyAvailable ? 1.0 : clamp(soilWater / readilyAvailable, 0.25, 1.0);
+      const eta = Math.min(soilWater, etc * ks);
+      soilWater = Math.max(0, soilWater - eta);
+      sumEta += eta;
     }
 
-    const relYieldPct = Math.round(clamp(relYield * 100, 28, 102));
-    return { year: h.year, relYieldPct, status };
-  });
+    totalEtcMm += sumEtc;
+    const etaRatio = clamp(sumEta / Math.max(1, sumEtc), 0.3, 1.0);
+    let relYield = 1 - ky * (1 - etaRatio);
 
-  const sorted = [...series].map((s) => s.relYieldPct).sort((a, b) => a - b);
-  const p10YieldPct = sorted[Math.floor(sorted.length * 0.1)];
-  const p50YieldPct = sorted[Math.floor(sorted.length * 0.5)];
-  const p90YieldPct = sorted[Math.floor(sorted.length * 0.9)];
+    let status: BacktestYearPoint['status'] = 'normal';
+    if (sumEta / Math.max(1, sumEtc) < 0.78) {
+      status = 'seca';
+    } else if (heavyRainDays >= 4 || sumRain > 1100) {
+      status = 'excesso';
+      const penalty = Math.max(0, 0.14 - excessRainTolerance * 0.1);
+      relYield -= penalty;
+    }
+
+    series.push({
+      year,
+      relYieldPct: Math.round(clamp(relYield * 100, 25, 100)),
+      seasonRainMm: Math.round(sumRain),
+      seasonEtcMm: Math.round(sumEtc),
+      status,
+    });
+  }
+
+  const sorted = series.map((s) => s.relYieldPct).sort((a, b) => a - b);
+  const p10YieldPct = sorted[Math.floor(sorted.length * 0.1)] ?? 60;
+  const p50YieldPct = sorted[Math.floor(sorted.length * 0.5)] ?? 80;
+  const p90YieldPct = sorted[Math.floor(sorted.length * 0.9)] ?? 95;
   const failures = series.filter((s) => s.relYieldPct < 60).length;
-  const failureRiskPct = Math.round((failures / series.length) * 100);
+  const failureRiskPct = series.length > 0 ? Math.round((failures / series.length) * 100) : 0;
+  const meanSeasonEtcMm = series.length > 0 ? totalEtcMm / series.length : 450;
 
   return {
     p10YieldPct,
     p50YieldPct,
     p90YieldPct,
     failureRiskPct,
+    meanSeasonEtcMm,
     yearlySeries: series,
   };
 }
@@ -114,197 +131,271 @@ function runFaoBacktest(
 export function evaluateRotationScenarios(
   analysis: FarmAnalysis,
   currentCrop: CropId,
+  cropsCatalog: Record<CropId, CropInfo>,
   priorities: FarmerPriorities,
+  constraints: FarmerConstraints,
   climateStress: ClimateStressScenario = { rainDeltaPct: 0, tempDeltaC: 0 }
 ): RotationScenario[] {
-  const crop = CROPS_CATALOG[currentCrop];
-  const { nasa, soil } = analysis;
+  const crop = cropsCatalog[currentCrop];
+  const { indicators, soil, dailyClimate } = analysis;
+  const lat = analysis.centroid[0];
 
-  const baseSeasonRain = Math.round(nasa.power.annualPrecipMm * 0.42);
-  const baseSeasonEt0 = Math.round(nasa.power.evapotranspirationMmDay * crop.cycleDays);
-
-  const isDrySoil = nasa.smap.soilMoisturePct < 20 || climateStress.rainDeltaPct <= -15;
-  const isHotSurface =
-    nasa.ecostress.surfaceTempC + climateStress.tempDeltaC >= 31;
-  const isHighErosion = nasa.erosion.riskIndex >= 50;
-  const isLowOM = soil.organicMatterPct < 2.5;
-
-  // Backtests (2006-2025)
-  const baseBacktest = runFaoBacktest(
-    baseSeasonRain,
-    baseSeasonEt0,
+  const baseBt = simulateDailyBucketBacktest(
+    dailyClimate,
+    lat,
     soil.availableWaterCapacityMm,
     crop.kc,
     crop.ky,
+    crop.cycleDays,
     0.0,
-    0.0,
-    climateStress
+    climateStress,
+    constraints.hasIrrigation
   );
 
-  const coverBacktest = runFaoBacktest(
-    baseSeasonRain,
-    baseSeasonEt0,
-    soil.availableWaterCapacityMm + 22, // Cover crop improves infiltration & AWC
-    crop.kc * 0.94,                     // Mulch reduces soil evaporation
+  const coverBt = simulateDailyBucketBacktest(
+    dailyClimate,
+    lat,
+    soil.availableWaterCapacityMm + 20, // Cover residue improves infiltration
+    crop.kc * 0.93,
     crop.ky * 0.92,
-    0.35,
-    0.85,                               // High erosion/excess rain protection
-    climateStress
+    crop.cycleDays,
+    0.85,
+    climateStress,
+    constraints.hasIrrigation
   );
 
-  const droughtBacktest = runFaoBacktest(
-    baseSeasonRain,
-    baseSeasonEt0,
-    soil.availableWaterCapacityMm + 12,
-    crop.kc * 0.78,                     // Lower water demand crop (Sorghum/Millet)
-    crop.ky * 0.72,                     // Lower yield sensitivity to water stress
-    0.75,
+  const droughtBt = simulateDailyBucketBacktest(
+    dailyClimate,
+    lat,
+    soil.availableWaterCapacityMm + 10,
+    crop.kc * 0.78, // Lower-Kc drought-tolerant second crop
+    crop.ky * 0.72,
+    crop.cycleDays,
     0.45,
-    climateStress
+    climateStress,
+    constraints.hasIrrigation
   );
 
-  // 1. Baseline
-  const baseWater = clampScore(
-    65 - (crop.waterDemandMm - 400) / 14 - (isDrySoil ? 16 : 4)
+  const forageBt = simulateDailyBucketBacktest(
+    dailyClimate,
+    lat,
+    soil.availableWaterCapacityMm + 16,
+    0.92, // Winter forage (Azevém/Aveia)
+    0.8,
+    120,
+    0.8,
+    climateStress,
+    constraints.hasIrrigation
   );
-  const baseYield = clampScore(baseBacktest.p50YieldPct - baseBacktest.failureRiskPct * 0.4);
-  const baseSoil = clampScore(46 + (crop.nitrogenFixing ? 10 : -6) - (isHighErosion ? 14 : 0));
-  const baseOverall = computeOverall(baseWater, baseYield, baseSoil, priorities);
 
-  // 2. Cover + Legumes
+  const powerTag = indicators.powerSource === 'live-daily' ? 'medido' : 'derivado';
+
+  // Comparative 0-100 indices derived from simulated ETc, P50, failure risk, and soil erosion
+  const baseWaterIdx = Math.round(clamp(100 - baseBt.meanSeasonEtcMm / 8.5, 20, 95));
+  const covWaterIdx = Math.round(clamp(100 - coverBt.meanSeasonEtcMm / 8.5, 20, 95));
+  const drWaterIdx = Math.round(clamp(100 - droughtBt.meanSeasonEtcMm / 8.5, 20, 95));
+  const forWaterIdx = Math.round(clamp(100 - forageBt.meanSeasonEtcMm / 8.5, 20, 95));
+
+  const baseYieldIdx = Math.round(clamp(baseBt.p50YieldPct - baseBt.failureRiskPct * 0.45, 20, 98));
+  const covYieldIdx = Math.round(clamp(coverBt.p50YieldPct - coverBt.failureRiskPct * 0.3, 20, 98));
+  const drYieldIdx = Math.round(clamp(droughtBt.p50YieldPct - droughtBt.failureRiskPct * 0.25, 20, 98));
+  const forYieldIdx = Math.round(
+    clamp(
+      forageBt.p50YieldPct - forageBt.failureRiskPct * 0.25 + (constraints.hasLivestock ? 10 : -8),
+      20,
+      98
+    )
+  );
+
+  const erosionPenalty = indicators.estimatedErosionIndex > 55 ? 12 : 4;
+  const baseSoilIdx = Math.round(clamp(48 + (crop.nitrogenFixing ? 10 : -6) - erosionPenalty, 20, 95));
+  const covSoilIdx = Math.round(clamp(82 + (constraints.hasNoTillPlanter ? 6 : 0), 20, 96));
+  const drSoilIdx = Math.round(clamp(66 + (indicators.estimatedErosionIndex > 50 ? 6 : 0), 20, 95));
+  const forSoilIdx = Math.round(clamp(80 + (constraints.hasLivestock ? 5 : 0), 20, 96));
+
+  const refTon = soil.historicalYieldTonHa[currentCrop] ?? 3.2;
+  const baseMargin = Math.round(refTon * 1100);
+
+  // Calculated water saved (1 mm ETc = 10 m³/ha)
+  const covWaterSaved = Math.max(0, Math.round((baseBt.meanSeasonEtcMm - coverBt.meanSeasonEtcMm) * 10));
+  const drWaterSaved = Math.max(0, Math.round((baseBt.meanSeasonEtcMm - droughtBt.meanSeasonEtcMm) * 10));
+  const forWaterSaved = Math.max(0, Math.round((baseBt.meanSeasonEtcMm - forageBt.meanSeasonEtcMm) * 10));
+
   const coverCropName =
-    currentCrop === 'soja'
-      ? soil.countryCode === 'BR' && analysis.centroid[0] < -22
-        ? 'Aveia Preta + Ervilhaca / Nabo'
-        : 'Braquiária + Crotalária'
-      : currentCrop === 'milho'
-        ? 'Feijão-guandu + Aveia'
-        : 'Crotalária + Milheto';
-
-  const covWater = clampScore(76 + (isDrySoil ? 10 : 6));
-  const covYield = clampScore(coverBacktest.p50YieldPct - coverBacktest.failureRiskPct * 0.25);
-  const covSoil = clampScore(85 + (isHighErosion ? 9 : 5) + (isLowOM ? 5 : 2));
-  const covOverall = computeOverall(covWater, covYield, covSoil, priorities);
-
-  // 3. Drought-Tolerant
+    lat < -22 ? 'Aveia Preta + Ervilhaca' : 'Braquiária + Crotalária';
   const droughtCropName =
-    nasa.ecostress.surfaceTempC > 33
-      ? 'Sorgo Granífero / Gergelim'
-      : currentCrop === 'trigo'
-        ? 'Grão-de-bico / Aveia Branca'
-        : 'Sorgo Granífero / Milheto';
-
-  const drWater = clampScore(85 + (isDrySoil ? 10 : 4) + (isHotSurface ? 3 : 0));
-  const drYield = clampScore(droughtBacktest.p50YieldPct - droughtBacktest.failureRiskPct * 0.2);
-  const drSoil = clampScore(69 + (isHighErosion ? 8 : 4));
-  const drOverall = computeOverall(drWater, drYield, drSoil, priorities);
-
-  const baseMargin = Math.round(soil.historicalYieldTonHa[currentCrop] * 1150);
+    currentCrop === 'trigo' ? 'Aveia Branca / Canola' : 'Sorgo Granífero / Milheto';
+  const forageCropName = 'Azevém + Aveia / Trevo (Pastejo)';
 
   const raw: Omit<RotationScenario, 'recommended'>[] = [
     {
       id: 'baseline',
-      title: 'Rotação Atual (Baseline)',
+      title: '1. Rotação Atual (Baseline)',
       subtitle: `${crop.name} → ${crop.defaultSecondCrop}`,
       sequence: [crop.name, crop.defaultSecondCrop, crop.name],
-      badge: 'Referência Atual',
       scores: {
-        waterUse: baseWater,
-        yieldPotential: baseYield,
-        soilBenefit: baseSoil,
-        overall: baseOverall,
+        waterIndex: baseWaterIdx,
+        yieldIndex: baseYieldIdx,
+        soilIndex: baseSoilIdx,
+        overall: computeOverall(baseWaterIdx, baseYieldIdx, baseSoilIdx, priorities),
       },
-      backtest: baseBacktest,
+      backtest: baseBt,
       impact: {
         waterSavedM3Ha: 0,
         nitrogenFixedKgHa: crop.nitrogenFixing ? '30–50 kg/ha' : '0 kg/ha',
-        estMarginBrlHa: Math.round(baseMargin * (baseBacktest.p50YieldPct / 100)),
+        estMarginBrlHa: Math.round(baseMargin * (baseBt.p50YieldPct / 100)),
       },
-      summary: `Mantém a sucessão atual (${crop.name} → ${crop.defaultSecondCrop}). No backtest de 20 anos, o pior caso (P10) cai para ${baseBacktest.p10YieldPct}% do potencial com ${baseBacktest.failureRiskPct}% de risco de quebra.`,
-      nasaEvidence: [
-        `NASA POWER: chuva anual ${nasa.power.annualPrecipMm} mm, ET ${nasa.power.evapotranspirationMmDay} mm/d`,
-        `SMAP (9 km): umidade ${nasa.smap.soilMoisturePct}% (anomalia ${nasa.smap.moistureAnomalyPct}%)`,
-        `MODIS/HLS: solo descoberto em ${nasa.modis.bareSoilMonths}`,
+      supportingData: [
+        {
+          text: `POWER (${indicators.powerPeriod}): chuva média ${indicators.annualMeanPrecipMm} mm/ano, T média ${indicators.annualAvgTempC} °C`,
+          provenance: powerTag,
+        },
+        {
+          text: `Balanço FAO-56: ETc média ${Math.round(baseBt.meanSeasonEtcMm)} mm/safra; P10 = ${baseBt.p10YieldPct}%`,
+          provenance: 'derivado',
+        },
+        {
+          text: `Parâmetros: Kc ${crop.kc}, Ky ${crop.ky} (${crop.sourceRef})`,
+          provenance: 'premissa',
+        },
       ],
       benefits: [
-        'Maquinário e manejo já dominados na propriedade',
-        'Liquidez imediata na cooperativa local',
+        'Sem alteração de maquinário ou canal de venda atual',
+        `Referência base: ${baseBt.failureRiskPct}% de anos abaixo de 60% do potencial`,
       ],
       dataGaps: [
-        'Sem análise química/física de solo (0–20 cm) medida na parcela',
-        'Custo real de frete e insumos da safra não informado',
+        'Sem análise química/física de solo (0–20 cm) da parcela',
+        'Custo real de insumos e frete não informado',
       ],
-      agronomistNotes: `Avaliar compactação e pressão de nematoides em ${soil.soilClass}. O período descoberto (${nasa.modis.bareSoilMonths}) expõe o solo a chuvas extremas (${nasa.power.extremeRainDays} dias/ano).`,
+      agronomistNotes: `Checar compactação e nematoides em ${soil.soilClass}. Sem cobertura na entressafra, ${indicators.extremeRainDaysPerYear} dias/ano de chuva extrema elevam a erosão.`,
     },
     {
       id: 'cover-legume',
-      title: 'Regenerativa: Cobertura + Leguminosas',
+      title: '2. Cobertura + Leguminosas',
       subtitle: `${crop.name} → ${coverCropName}`,
       sequence: [crop.name, coverCropName, crop.name],
-      badge: 'Saúde do Solo & Água',
       scores: {
-        waterUse: covWater,
-        yieldPotential: covYield,
-        soilBenefit: covSoil,
-        overall: covOverall,
+        waterIndex: covWaterIdx,
+        yieldIndex: covYieldIdx,
+        soilIndex: covSoilIdx,
+        overall: computeOverall(covWaterIdx, covYieldIdx, covSoilIdx, priorities),
       },
-      backtest: coverBacktest,
+      backtest: coverBt,
       impact: {
-        waterSavedM3Ha: 420,
-        nitrogenFixedKgHa: '60–110 kg/ha',
-        estMarginBrlHa: Math.round(baseMargin * (coverBacktest.p50YieldPct / 100) + 340),
+        waterSavedM3Ha: covWaterSaved,
+        nitrogenFixedKgHa: '60–110 kg/ha (faixa Embrapa)',
+        estMarginBrlHa: Math.round(baseMargin * (coverBt.p50YieldPct / 100) + 280),
       },
-      summary: `Insere cobertura viva + leguminosa (${coverCropName}) protegendo o solo contra erosão e evaporação. Eleva a mediana (P50) para ${coverBacktest.p50YieldPct}% e reduz o risco de quebra para ${coverBacktest.failureRiskPct}%.`,
-      nasaEvidence: [
-        `Risco de Erosão (NASADEM+GPM): ${nasa.erosion.riskIndex}/100 (${nasa.erosion.riskLevel})`,
-        `ECOSTRESS (evidência térmica): ${nasa.ecostress.surfaceTempC}°C (${nasa.ecostress.heatStressDays} dias quentes)`,
-        `SoilGrids/Local: MO ${soil.organicMatterPct}% | AWC ${soil.availableWaterCapacityMm} mm`,
+      supportingData: [
+        {
+          text: `POWER: ${indicators.extremeRainDaysPerYear} dias/ano acima do P95 de chuva`,
+          provenance: powerTag,
+        },
+        {
+          text: `Balanço FAO-56: ETc ${Math.round(coverBt.meanSeasonEtcMm)} mm/safra (−${covWaterSaved} m³/ha); quebra ${coverBt.failureRiskPct}%`,
+          provenance: 'derivado',
+        },
+        {
+          text: `Solo local (${soil.dataSourceLabel}): MO ${soil.organicMatterPct}%, AWC ${soil.availableWaterCapacityMm} mm`,
+          provenance: 'premissa',
+        },
       ],
       benefits: [
-        'Fixação biológica de N (60–110 kg N/ha, faixa Embrapa) reduz adubação mineral',
-        'Cobertura reduz escorrimento superficial em eventos de chuva extrema',
-        'Aumenta infiltração e reduz temperatura do solo na entressafra',
+        'Fixação biológica de N (60–110 kg/ha) reduz adubação mineral na safra seguinte',
+        'Palhada reduz escorrimento superficial e perda de solo por erosão',
       ],
       dataGaps: [
-        'Disponibilidade local de sementes de cobertura e janela exata do ZARC',
-        'Eventual custo de dessecação antes da semeadura de verão',
+        'Disponibilidade de sementes e janela de plantio ZARC no município',
+        constraints.hasNoTillPlanter
+          ? 'Ajuste de dessecação antes da safra principal'
+          : 'Propriedade sem plantadeira direta informada (requer adaptação)',
       ],
-      agronomistNotes: `Confirmar com o agrônomo/EMATER a data de manejo da cobertura para não competir por água na implantação de ${crop.name} e validar herbicidas residuais.`,
+      agronomistNotes: `Validar época de manejo/dessecação de ${coverCropName} para evitar competição hídrica na implantação de ${crop.name}.`,
     },
     {
       id: 'drought-tolerant',
-      title: 'Resiliente: Tolerante à Seca',
+      title: '3. Cultura Tolerante à Seca',
       subtitle: `${crop.name} → ${droughtCropName}`,
       sequence: [crop.name, droughtCropName, crop.name],
-      badge: 'Seguro-Clima',
       scores: {
-        waterUse: drWater,
-        yieldPotential: drYield,
-        soilBenefit: drSoil,
-        overall: drOverall,
+        waterIndex: drWaterIdx,
+        yieldIndex: drYieldIdx,
+        soilIndex: drSoilIdx,
+        overall: computeOverall(drWaterIdx, drYieldIdx, drSoilIdx, priorities),
       },
-      backtest: droughtBacktest,
+      backtest: droughtBt,
       impact: {
-        waterSavedM3Ha: 780,
+        waterSavedM3Ha: drWaterSaved,
         nitrogenFixedKgHa: '15–30 kg/ha',
-        estMarginBrlHa: Math.round(baseMargin * (droughtBacktest.p50YieldPct / 100) + 190),
+        estMarginBrlHa: Math.round(baseMargin * (droughtBt.p50YieldPct / 100) + 160),
       },
-      summary: `Substitui a 2ª safra sensível por ${droughtCropName} (menor Kc FAO-56). No pior cenário histórico (P10), garante ${droughtBacktest.p10YieldPct}% de rendimento e corta o risco de quebra para ${droughtBacktest.failureRiskPct}%.`,
-      nasaEvidence: [
-        `GPM (10 km): ${nasa.gpm.accumulatedRain90dMm} mm em 90d (anomalia ${nasa.gpm.rainAnomalyPct}%)`,
-        `NASA POWER: déficit sazonal ${nasa.power.waterDeficitMmSeason} mm | Geada: ${nasa.power.frostRiskDays} d/ano`,
-        `SMAP: ${nasa.smap.soilMoisturePct}% (${nasa.smap.rootZoneStatus})`,
+      supportingData: [
+        {
+          text: `POWER: déficit hídrico sazonal médio de ${indicators.seasonalWaterDeficitMm} mm; geadas ${indicators.frostDaysPerYear} d/ano`,
+          provenance: powerTag,
+        },
+        {
+          text: `Balanço FAO-56: ETc ${Math.round(droughtBt.meanSeasonEtcMm)} mm/safra (−${drWaterSaved} m³/ha); P10 = ${droughtBt.p10YieldPct}%`,
+          provenance: 'derivado',
+        },
+        {
+          text: `Redução de Kc (×0,78) e Ky (×0,72) baseada em FAO-56/33`,
+          provenance: 'premissa',
+        },
       ],
       benefits: [
-        'Economia estimada de ~780 m³/ha na entressafra frente a culturas exigentes',
-        'Sistema radicular profundo aproveita umidade residual e gera forragem/grão',
-        'Maior estabilidade em anos de La Niña ou veranicos prolongados',
+        `Economia calculada de ${drWaterSaved} m³/ha pela menor demanda evapotranspirativa`,
+        `Reduz risco de quebra (< 60%) de ${baseBt.failureRiskPct}% para ${droughtBt.failureRiskPct}%`,
       ],
       dataGaps: [
         'Cotação regional atualizada (CONAB/cooperativa) para sorgo/milheto',
-        'Necessidade de ajuste de colhedora/plantadeira na fazenda',
+        'Disponibilidade de plataforma/colhedora adaptada',
       ],
-      agronomistNotes: `Validar comprador ou uso como silagem/pastejo na região de ${soil.municipality} e checar risco de geada (${nasa.power.frostRiskDays} dias ≤ 2°C) para semeadura tardia.`,
+      agronomistNotes: `Confirmar comprador local para ${droughtCropName} em ${soil.municipality} e checar risco de geada (${indicators.frostDaysPerYear} dias ≤ 2 °C).`,
+    },
+    {
+      id: 'forage-livestock',
+      title: '4. Forrageira / Integração Pecuária',
+      subtitle: `${crop.name} → ${forageCropName}`,
+      sequence: [crop.name, forageCropName, crop.name],
+      scores: {
+        waterIndex: forWaterIdx,
+        yieldIndex: forYieldIdx,
+        soilIndex: forSoilIdx,
+        overall: computeOverall(forWaterIdx, forYieldIdx, forSoilIdx, priorities),
+      },
+      backtest: forageBt,
+      impact: {
+        waterSavedM3Ha: forWaterSaved,
+        nitrogenFixedKgHa: '40–80 kg/ha (com trevo)',
+        estMarginBrlHa: Math.round(
+          baseMargin * (forageBt.p50YieldPct / 100) + (constraints.hasLivestock ? 420 : 90)
+        ),
+      },
+      supportingData: [
+        {
+          text: `POWER: ${indicators.frostDaysPerYear} dias/ano ≤ 2 °C (adequado para forrageiras de inverno)`,
+          provenance: powerTag,
+        },
+        {
+          text: `Balanço FAO-56: P50 = ${forageBt.p50YieldPct}%, quebra = ${forageBt.failureRiskPct}%`,
+          provenance: 'derivado',
+        },
+        {
+          text: `Referência EMATER-RS / UFRGS para integração lavoura-pecuária no Vale do Taquari`,
+          provenance: 'premissa',
+        },
+      ],
+      benefits: [
+        'Renda extra com pastejo/silagem de leite ou corte no inverno',
+        'Cobertura densa protege o solo contra chuvas intensas de outono/primavera',
+      ],
+      dataGaps: [
+        constraints.hasLivestock
+          ? 'Lotação animal (UA/ha) para evitar compactação superficial'
+          : 'Propriedade sem rebanho informado (exige arrendamento de pasto ou venda de feno)',
+      ],
+      agronomistNotes: `Ajustar altura de entrada e saída dos animais para manter massa residual mínima na implantação de ${crop.name}.`,
     },
   ];
 
@@ -319,4 +410,53 @@ export function evaluateRotationScenarios(
     ...item,
     recommended: idx === bestIdx,
   }));
+}
+
+export function runSensitivityAnalysis(
+  analysis: FarmAnalysis,
+  currentCrop: CropId,
+  cropsCatalog: Record<CropId, CropInfo>,
+  priorities: FarmerPriorities,
+  constraints: FarmerConstraints,
+  climateStress: ClimateStressScenario
+): SensitivityResult {
+  const baseWinner =
+    evaluateRotationScenarios(analysis, currentCrop, cropsCatalog, priorities, constraints, climateStress).find(
+      (s) => s.recommended
+    )?.title ?? '';
+
+  const pickWinner = (kcMult: number, kyMult: number) => {
+    const modCatalog: Record<CropId, CropInfo> = {
+      ...cropsCatalog,
+      [currentCrop]: {
+        ...cropsCatalog[currentCrop],
+        kc: Number((cropsCatalog[currentCrop].kc * kcMult).toFixed(2)),
+        ky: Number((cropsCatalog[currentCrop].ky * kyMult).toFixed(2)),
+      },
+    };
+    return (
+      evaluateRotationScenarios(analysis, currentCrop, modCatalog, priorities, constraints, climateStress).find(
+        (s) => s.recommended
+      )?.title ?? ''
+    );
+  };
+
+  const kcMinus20Winner = pickWinner(0.8, 1.0);
+  const kcPlus20Winner = pickWinner(1.2, 1.0);
+  const kyMinus20Winner = pickWinner(1.0, 0.8);
+  const kyPlus20Winner = pickWinner(1.0, 1.2);
+
+  const isStable =
+    kcMinus20Winner === baseWinner &&
+    kcPlus20Winner === baseWinner &&
+    kyMinus20Winner === baseWinner &&
+    kyPlus20Winner === baseWinner;
+
+  return {
+    kcMinus20Winner,
+    kcPlus20Winner,
+    kyMinus20Winner,
+    kyPlus20Winner,
+    isStable,
+  };
 }

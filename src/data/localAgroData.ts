@@ -1,21 +1,6 @@
-import type { CropId, LocalSoilProfile, RegionPreset } from '../types/agro';
+import type { CropId, CropInfo, LocalSoilProfile, RegionPreset } from '../types/agro';
 
-export interface CropInfo {
-  id: CropId;
-  name: string;
-  cycleDays: number;
-  waterDemandMm: number;
-  kc: number;        // FAO-56 mid-season crop coefficient
-  ky: number;        // FAO-33 yield response factor
-  nitrogenFixing: boolean;
-  heatTolerance: 'Baixa' | 'Média' | 'Alta';
-  residueCover: 'Baixa' | 'Média' | 'Alta';
-  pestBreakRole: string;
-  defaultSecondCrop: string;
-  sourceRef: string;
-}
-
-export const CROPS_CATALOG: Record<CropId, CropInfo> = {
+export const DEFAULT_CROPS_CATALOG: Record<CropId, CropInfo> = {
   soja: {
     id: 'soja',
     name: 'Soja',
@@ -26,7 +11,7 @@ export const CROPS_CATALOG: Record<CropId, CropInfo> = {
     nitrogenFixing: true,
     heatTolerance: 'Média',
     residueCover: 'Baixa',
-    pestBreakRole: 'Fixa N atmosférico; exige rotação com gramíneas para quebrar nematoides',
+    pestBreakRole: 'Fixa N; requer rotação com gramíneas contra nematoides',
     defaultSecondCrop: 'Milho 2ª Safra',
     sourceRef: 'FAO-56 / Embrapa Soja',
   },
@@ -40,7 +25,7 @@ export const CROPS_CATALOG: Record<CropId, CropInfo> = {
     nitrogenFixing: false,
     heatTolerance: 'Média',
     residueCover: 'Alta',
-    pestBreakRole: 'Alta produção de palhada (C/N alto); reduz plantas daninhas',
+    pestBreakRole: 'Alta massa de palhada (C/N alto); reduz daninhas',
     defaultSecondCrop: 'Pousio / Soja',
     sourceRef: 'FAO-56 / FAO-33',
   },
@@ -54,7 +39,7 @@ export const CROPS_CATALOG: Record<CropId, CropInfo> = {
     nitrogenFixing: false,
     heatTolerance: 'Alta',
     residueCover: 'Baixa',
-    pestBreakRole: 'Ciclo longo; beneficia-se de milheto/braquiária na entressafra',
+    pestBreakRole: 'Ciclo longo; beneficia-se de milheto na entressafra',
     defaultSecondCrop: 'Milheto / Pousio',
     sourceRef: 'FAO-56 / CONAB',
   },
@@ -68,7 +53,7 @@ export const CROPS_CATALOG: Record<CropId, CropInfo> = {
     nitrogenFixing: false,
     heatTolerance: 'Baixa',
     residueCover: 'Média',
-    pestBreakRole: 'Cultura de inverno; sensível a geada na floração e excesso de chuva na colheita',
+    pestBreakRole: 'Inverno; sensível a geada na floração e chuva na colheita',
     defaultSecondCrop: 'Soja',
     sourceRef: 'FAO-56 / ZARC-RS',
   },
@@ -82,9 +67,65 @@ export const CROPS_CATALOG: Record<CropId, CropInfo> = {
     nitrogenFixing: true,
     heatTolerance: 'Média',
     residueCover: 'Baixa',
-    pestBreakRole: 'Ciclo curto, ótima janela pós-safra com leguminosa',
+    pestBreakRole: 'Ciclo curto pós-safra com fixação de N',
     defaultSecondCrop: 'Milho / Sorgo',
-    sourceRef: 'FAO-56 / Embrapa Arroz e Feijão',
+    sourceRef: 'FAO-56 / Embrapa',
+  },
+  azevem: {
+    id: 'azevem',
+    name: 'Azevém (Forrageira)',
+    cycleDays: 130,
+    waterDemandMm: 380,
+    kc: 0.95,
+    ky: 0.8,
+    nitrogenFixing: false,
+    heatTolerance: 'Baixa',
+    residueCover: 'Alta',
+    pestBreakRole: 'Cobertura de inverno e pastejo no Vale do Taquari',
+    defaultSecondCrop: 'Soja / Milho',
+    sourceRef: 'EMATER-RS / UFRGS',
+  },
+  aveia: {
+    id: 'aveia',
+    name: 'Aveia Preta',
+    cycleDays: 110,
+    waterDemandMm: 340,
+    kc: 0.9,
+    ky: 0.78,
+    nitrogenFixing: false,
+    heatTolerance: 'Média',
+    residueCover: 'Alta',
+    pestBreakRole: 'Supressão de daninhas e proteção contra erosão',
+    defaultSecondCrop: 'Soja / Milho',
+    sourceRef: 'Embrapa Trigo / ZARC-RS',
+  },
+  canola: {
+    id: 'canola',
+    name: 'Canola',
+    cycleDays: 125,
+    waterDemandMm: 410,
+    kc: 1.05,
+    ky: 0.95,
+    nitrogenFixing: false,
+    heatTolerance: 'Baixa',
+    residueCover: 'Média',
+    pestBreakRole: 'Alternativa de inverno para quebra de doenças de cereais',
+    defaultSecondCrop: 'Soja',
+    sourceRef: 'Embrapa Trigo / ZARC-RS',
+  },
+  mandioca: {
+    id: 'mandioca',
+    name: 'Mandioca',
+    cycleDays: 240,
+    waterDemandMm: 520,
+    kc: 0.85,
+    ky: 0.65,
+    nitrogenFixing: false,
+    heatTolerance: 'Alta',
+    residueCover: 'Média',
+    pestBreakRole: 'Alta tolerância a veranicos; cultivo tradicional no RS',
+    defaultSecondCrop: 'Aveia / Feijão',
+    sourceRef: 'FAO-56 / EMATER-RS',
   },
 };
 
@@ -92,7 +133,7 @@ export const REGION_PRESETS: RegionPreset[] = [
   {
     id: 'lajeado-rs',
     name: 'Lajeado, RS (Vale do Taquari)',
-    subtitle: 'Caso principal: seca 2022 + enchente 2024 • Relevo ondulado',
+    subtitle: 'Seca 2022 + chuva extrema 2024',
     center: [-29.4669, -51.9614],
     zoom: 13,
     defaultCrop: 'soja',
@@ -106,7 +147,7 @@ export const REGION_PRESETS: RegionPreset[] = [
   {
     id: 'sorriso-mt',
     name: 'Sorriso, MT (Cerrado)',
-    subtitle: 'Grãos em Latossolo — déficit hídrico na safrinha',
+    subtitle: 'Grãos em Latossolo',
     center: [-12.5425, -55.7211],
     zoom: 13,
     defaultCrop: 'soja',
@@ -120,7 +161,7 @@ export const REGION_PRESETS: RegionPreset[] = [
   {
     id: 'londrina-pr',
     name: 'Londrina, PR (Sul)',
-    subtitle: 'Latossolo Eutroférrico — risco de erosão e geada',
+    subtitle: 'Latossolo Eutroférrico',
     center: [-23.3103, -51.1628],
     zoom: 13,
     defaultCrop: 'soja',
@@ -134,7 +175,7 @@ export const REGION_PRESETS: RegionPreset[] = [
   {
     id: 'petrolina-pe',
     name: 'Petrolina, PE (Semiárido)',
-    subtitle: 'Alta evapotranspiração — estresse térmico severo',
+    subtitle: 'Déficit hídrico severo',
     center: [-9.3891, -40.5027],
     zoom: 13,
     defaultCrop: 'feijao',
@@ -147,8 +188,8 @@ export const REGION_PRESETS: RegionPreset[] = [
   },
   {
     id: 'iowa-us',
-    name: 'Ames, Iowa (EUA • USDA SSURGO/CDL)',
-    subtitle: 'Portabilidade global: adaptador USDA + NASA POWER',
+    name: 'Ames, Iowa (EUA)',
+    subtitle: 'USDA SSURGO/CDL + NASA POWER',
     center: [42.0308, -93.6319],
     zoom: 13,
     defaultCrop: 'milho',
@@ -161,8 +202,8 @@ export const REGION_PRESETS: RegionPreset[] = [
   },
   {
     id: 'nakuru-ke',
-    name: 'Nakuru, Quênia (África Oriental)',
-    subtitle: 'Portabilidade global: camadas globais NASA + SoilGrids',
+    name: 'Nakuru, Quênia',
+    subtitle: 'Modo global (SoilGrids + NASA POWER)',
     center: [-0.3031, 36.08],
     zoom: 13,
     defaultCrop: 'milho',
@@ -185,10 +226,10 @@ const MUNICIPAL_SOIL_DB: {
     lng: -51.96,
     profile: {
       municipality: 'Lajeado - RS',
-      regionLabel: 'Vale do Taquari (Rio Grande do Sul)',
+      regionLabel: 'Vale do Taquari (RS)',
       countryCode: 'BR',
       confidenceLevel: 'Alta',
-      dataSourceLabel: 'Embrapa/UFRGS + MapBiomas + ZARC-RS',
+      dataSourceLabel: 'Embrapa/UFRGS + ZARC-RS',
       soilClass: 'Argissolo Vermelho / Neossolo Litólico',
       texture: 'Franco-argilosa (34% argila)',
       organicMatterPct: 2.8,
@@ -198,12 +239,11 @@ const MUNICIPAL_SOIL_DB: {
       historicalYieldTonHa: {
         soja: 3.4,
         milho: 7.5,
-        algodao: 2.4,
         trigo: 3.1,
         feijao: 2.1,
+        mandioca: 22.0,
       },
-      notes:
-        'Relevo ondulado com risco duplo: estiagens severas de verão (2021–23) e chuvas extremas (2024). Plantio direto + cobertura permanente é crítico.',
+      notes: 'Relevo ondulado sujeito a erosão em chuvas intensas e déficit hídrico no verão.',
     },
   },
   {
@@ -211,10 +251,10 @@ const MUNICIPAL_SOIL_DB: {
     lng: -55.72,
     profile: {
       municipality: 'Sorriso - MT',
-      regionLabel: 'Médio-Norte Mato-grossense (Cerrado)',
+      regionLabel: 'Médio-Norte (MT)',
       countryCode: 'BR',
       confidenceLevel: 'Alta',
-      dataSourceLabel: 'Embrapa Solos + MapBiomas + CONAB',
+      dataSourceLabel: 'Embrapa Solos + CONAB',
       soilClass: 'Latossolo Vermelho-Amarelo Distrófico',
       texture: 'Argilo-arenosa (38% argila)',
       organicMatterPct: 2.4,
@@ -225,11 +265,9 @@ const MUNICIPAL_SOIL_DB: {
         soja: 3.7,
         milho: 6.4,
         algodao: 4.3,
-        trigo: 2.1,
         feijao: 2.2,
       },
-      notes:
-        'Solo profundo e bem drenado, porém com rápida perda de umidade superficial após maio. Cobertura morta reduz temperatura superficial.',
+      notes: 'Solo profundo bem drenado com perda rápida de umidade após maio.',
     },
   },
   {
@@ -237,10 +275,10 @@ const MUNICIPAL_SOIL_DB: {
     lng: -51.16,
     profile: {
       municipality: 'Londrina - PR',
-      regionLabel: 'Norte Central Paranaense',
+      regionLabel: 'Norte Central (PR)',
       countryCode: 'BR',
       confidenceLevel: 'Alta',
-      dataSourceLabel: 'Embrapa/IDR-PR + MapBiomas + CONAB',
+      dataSourceLabel: 'Embrapa/IDR-PR + CONAB',
       soilClass: 'Latossolo Vermelho Eutroférrico',
       texture: 'Muito argilosa (68% argila)',
       organicMatterPct: 3.1,
@@ -250,12 +288,10 @@ const MUNICIPAL_SOIL_DB: {
       historicalYieldTonHa: {
         soja: 3.9,
         milho: 8.2,
-        algodao: 3.5,
         trigo: 3.2,
         feijao: 2.4,
       },
-      notes:
-        'Alta fertilidade natural, mas relevo ondulado e chuvas concentradas elevam o risco de erosão laminar sem palhada.',
+      notes: 'Alta fertilidade natural; relevo ondulado exige cobertura para conter erosão.',
     },
   },
   {
@@ -263,10 +299,10 @@ const MUNICIPAL_SOIL_DB: {
     lng: -40.5,
     profile: {
       municipality: 'Petrolina - PE',
-      regionLabel: 'Submédio São Francisco (Semiárido)',
+      regionLabel: 'Submédio São Francisco (PE)',
       countryCode: 'BR',
       confidenceLevel: 'Alta',
-      dataSourceLabel: 'Embrapa Semiárido + MapBiomas',
+      dataSourceLabel: 'Embrapa Semiárido',
       soilClass: 'Argissolo Amarelo / Neossolo Quartzarênico',
       texture: 'Arenosa-franca (14% argila)',
       organicMatterPct: 1.1,
@@ -274,14 +310,11 @@ const MUNICIPAL_SOIL_DB: {
       availableWaterCapacityMm: 62,
       erosionSusceptibility: 'Alta',
       historicalYieldTonHa: {
-        soja: 2.3,
-        milho: 4.1,
-        algodao: 2.9,
-        trigo: 1.5,
         feijao: 1.8,
+        milho: 4.1,
+        mandioca: 16.0,
       },
-      notes:
-        'Baixa retenção hídrica e matéria orgânica reduzida. Priorizar espécies rústicas, cobertura viva e redução da temperatura do solo.',
+      notes: 'Baixa retenção hídrica e matéria orgânica reduzida.',
     },
   },
   {
@@ -289,10 +322,10 @@ const MUNICIPAL_SOIL_DB: {
     lng: -93.63,
     profile: {
       municipality: 'Ames, Iowa (EUA)',
-      regionLabel: 'US Corn Belt (Midwest)',
+      regionLabel: 'US Corn Belt',
       countryCode: 'US',
       confidenceLevel: 'Alta',
-      dataSourceLabel: 'USDA SSURGO + CropScape CDL + PRISM',
+      dataSourceLabel: 'USDA SSURGO + CDL',
       soilClass: 'Mollisol (Clarion-Nicollet-Webster)',
       texture: 'Franco-argilo-siltosa (32% argila)',
       organicMatterPct: 4.4,
@@ -302,12 +335,9 @@ const MUNICIPAL_SOIL_DB: {
       historicalYieldTonHa: {
         soja: 3.8,
         milho: 11.4,
-        algodao: 2.0,
         trigo: 4.5,
-        feijao: 2.3,
       },
-      notes:
-        'Adaptador USDA ativo: solos profundos ricos em matéria orgânica; culturas de cobertura de inverno (centeio/ervilhaca) reduzem lixiviação de nitrato.',
+      notes: 'Solos profundos; culturas de cobertura no inverno reduzem lixiviação de N.',
     },
   },
   {
@@ -318,7 +348,7 @@ const MUNICIPAL_SOIL_DB: {
       regionLabel: 'Rift Valley Highlands',
       countryCode: 'KE',
       confidenceLevel: 'Média',
-      dataSourceLabel: 'SoilGrids 250m + ESA WorldCover + NASA Global',
+      dataSourceLabel: 'SoilGrids 250m (Global)',
       soilClass: 'Andosol / Phaeozem Vulcânico',
       texture: 'Franco-siltosa (26% argila)',
       organicMatterPct: 2.9,
@@ -326,14 +356,11 @@ const MUNICIPAL_SOIL_DB: {
       availableWaterCapacityMm: 100,
       erosionSusceptibility: 'Alta',
       historicalYieldTonHa: {
-        soja: 1.9,
         milho: 3.2,
-        algodao: 1.5,
-        trigo: 2.4,
         feijao: 1.4,
+        trigo: 2.4,
       },
-      notes:
-        'Modo Global-Only (confiança média): sem base municipal local. Recomenda-se consórcio milho + feijão/lab-lab para mitigar chuvas irregulares.',
+      notes: 'Dados globais (confiança média); recomenda-se validação local de solo.',
     },
   },
 ];
@@ -357,14 +384,12 @@ export function resolveLocalSoil(lat: number, lng: number): LocalSoilProfile {
   const absLat = Math.abs(lat);
   const isAridBelt = absLat >= 8 && absLat <= 20 && lng > -46 && lng < -34;
   return {
-    municipality: `Talhão Global (${lat.toFixed(2)}°, ${lng.toFixed(2)}°)`,
-    regionLabel: absLat < 23.5 ? 'Zona Tropical Agrícola' : 'Zona Subtropical / Temperada',
+    municipality: `Talhão (${lat.toFixed(2)}°, ${lng.toFixed(2)}°)`,
+    regionLabel: absLat < 23.5 ? 'Zona Tropical' : 'Zona Subtropical / Temperada',
     countryCode: 'GLOBAL',
     confidenceLevel: 'Média',
-    dataSourceLabel: 'SoilGrids 250m + ESA WorldCover (Modo Global)',
-    soilClass: isAridBelt
-      ? 'Neossolo / Argissolo de Baixa Retenção'
-      : 'Latossolo / Cambissolo Agrícola',
+    dataSourceLabel: 'SoilGrids 250m (estimativa global)',
+    soilClass: isAridBelt ? 'Neossolo / Argissolo' : 'Latossolo / Cambissolo',
     texture: isAridBelt ? 'Franco-arenosa (18% argila)' : 'Franco-argilosa (42% argila)',
     organicMatterPct: isAridBelt ? 1.4 : 2.6,
     waterRetentionCapacity: isAridBelt ? 'Baixa' : 'Média',
@@ -373,11 +398,9 @@ export function resolveLocalSoil(lat: number, lng: number): LocalSoilProfile {
     historicalYieldTonHa: {
       soja: 3.4,
       milho: 6.2,
-      algodao: 3.6,
       trigo: 2.6,
       feijao: 2.1,
     },
-    notes:
-      'Perfil global (confiança média). Recomenda-se análise de solo (0–20 cm) com agrônomo/EMATER para calibração local.',
+    notes: 'Estimativa global. Coletar amostra de solo (0–20 cm) para calibração.',
   };
 }

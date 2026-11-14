@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BookOpen, FileDown, LayoutGrid, Map as MapIcon, MapPin, Sprout } from 'lucide-react';
-import { REGION_PRESETS } from './data/localAgroData';
+import { DEFAULT_CROPS_CATALOG, REGION_PRESETS } from './data/localAgroData';
 import { analyzeFarmPolygon } from './services/nasaDataService';
-import { evaluateRotationScenarios } from './engine/rotationEngine';
+import { evaluateRotationScenarios, runSensitivityAnalysis } from './engine/rotationEngine';
 import { generateAgronomistPdf } from './utils/pdfReport';
 import { ControlSidebar } from './components/ControlSidebar';
 import { FarmMap } from './components/FarmMap';
@@ -10,34 +10,45 @@ import { RotationDrawer } from './components/RotationDrawer';
 import { CropDashboard } from './components/CropDashboard';
 import { MethodologyView } from './components/MethodologyView';
 import type {
-  ActiveLayer,
   AppViewMode,
   ClimateStressScenario,
   CropId,
+  CropInfo,
   FarmAnalysis,
+  FarmerConstraints,
   FarmerPriorities,
+  GibsLayerId,
 } from './types/agro';
 
 export function App() {
-  const [viewMode, setViewMode] = useState<AppViewMode>('crops');
+  const [viewMode, setViewMode] = useState<AppViewMode>('map');
   const [selectedPresetId, setSelectedPresetId] = useState<string>(REGION_PRESETS[0].id);
   const [mapCenter, setMapCenter] = useState<[number, number]>(REGION_PRESETS[0].center);
   const [mapZoom, setMapZoom] = useState<number>(REGION_PRESETS[0].zoom);
 
+  const [cropsCatalog, setCropsCatalog] = useState<Record<CropId, CropInfo>>(DEFAULT_CROPS_CATALOG);
   const [currentCrop, setCurrentCrop] = useState<CropId>(REGION_PRESETS[0].defaultCrop);
+  const [cropHistoryNote, setCropHistoryNote] = useState<string>(
+    'Soja (verão) + milho/pousio nos últimos 4 anos'
+  );
+
   const [priorities, setPriorities] = useState<FarmerPriorities>({
     lessWater: 75,
     moreIncome: 65,
     improveSoil: 80,
     reduceErosion: 60,
   });
+  const [constraints, setConstraints] = useState<FarmerConstraints>({
+    hasIrrigation: false,
+    hasNoTillPlanter: true,
+    hasLivestock: false,
+  });
   const [climateStress, setClimateStress] = useState<ClimateStressScenario>({
     rainDeltaPct: 0,
     tempDeltaC: 0,
   });
 
-  const [activeLayer, setActiveLayer] = useState<ActiveLayer>('moisture');
-  const [showGibsOverlay, setShowGibsOverlay] = useState<boolean>(false);
+  const [gibsLayer, setGibsLayer] = useState<GibsLayerId>('modis_ndvi');
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
 
   const [analysis, setAnalysis] = useState<FarmAnalysis | null>(null);
@@ -64,6 +75,7 @@ export function App() {
     setMapCenter(preset.center);
     setMapZoom(preset.zoom);
     setCurrentCrop(preset.defaultCrop);
+    setCropHistoryNote(`${DEFAULT_CROPS_CATALOG[preset.defaultCrop].name} nos últimos ciclos`);
     setIsDrawing(false);
     runAnalysis(preset.polygonCoords);
   };
@@ -76,14 +88,47 @@ export function App() {
     [runAnalysis]
   );
 
+  const handleUpdateCropParam = (
+    id: CropId,
+    field: 'kc' | 'ky' | 'cycleDays',
+    value: number
+  ) => {
+    setCropsCatalog((prev) => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: value,
+      },
+    }));
+  };
+
   const scenarios = useMemo(() => {
     if (!analysis) return [];
-    return evaluateRotationScenarios(analysis, currentCrop, priorities, climateStress);
-  }, [analysis, currentCrop, priorities, climateStress]);
+    return evaluateRotationScenarios(
+      analysis,
+      currentCrop,
+      cropsCatalog,
+      priorities,
+      constraints,
+      climateStress
+    );
+  }, [analysis, currentCrop, cropsCatalog, priorities, constraints, climateStress]);
+
+  const sensitivity = useMemo(() => {
+    if (!analysis) return null;
+    return runSensitivityAnalysis(
+      analysis,
+      currentCrop,
+      cropsCatalog,
+      priorities,
+      constraints,
+      climateStress
+    );
+  }, [analysis, currentCrop, cropsCatalog, priorities, constraints, climateStress]);
 
   const handleDownloadPdf = () => {
     if (!analysis || scenarios.length === 0) return;
-    generateAgronomistPdf(analysis, currentCrop, priorities, scenarios);
+    generateAgronomistPdf(analysis, currentCrop, cropsCatalog, priorities, scenarios);
   };
 
   return (
@@ -92,14 +137,13 @@ export function App() {
       <header className="top-bar">
         <div className="brand-group">
           <div className="brand-logo">
-            <Sprout size={20} />
+            <Sprout size={19} />
           </div>
           <div>
             <h1>Field Shift</h1>
           </div>
         </div>
 
-        {/* Intuitive View Switcher */}
         <nav className="view-switcher" aria-label="Navegação principal">
           <button
             type="button"
@@ -108,7 +152,7 @@ export function App() {
             onClick={() => setViewMode('map')}
           >
             <MapIcon size={15} />
-            <span>Mapa & Talhão</span>
+            <span>Mapa &amp; Talhão</span>
           </button>
           <button
             type="button"
@@ -126,7 +170,7 @@ export function App() {
             onClick={() => setViewMode('methodology')}
           >
             <BookOpen size={15} />
-            <span>Dados & Metodologia</span>
+            <span>Dados &amp; Metodologia</span>
           </button>
         </nav>
 
@@ -134,7 +178,7 @@ export function App() {
           <div className="preset-picker">
             <MapPin size={15} />
             <label htmlFor="region-preset-select" className="sr-only">
-              Região de exemplo
+              Região
             </label>
             <select
               id="region-preset-select"
@@ -156,8 +200,8 @@ export function App() {
             disabled={!analysis || isLoading}
             onClick={handleDownloadPdf}
           >
-            <FileDown size={16} />
-            <span>Download PDF</span>
+            <FileDown size={15} />
+            <span>Gerar relatório para o agrônomo</span>
           </button>
         </div>
       </header>
@@ -165,17 +209,18 @@ export function App() {
       {/* Main Workspace */}
       <div className="workspace-body">
         <ControlSidebar
+          cropsCatalog={cropsCatalog}
           currentCrop={currentCrop}
           onCropChange={setCurrentCrop}
           priorities={priorities}
           onPrioritiesChange={setPriorities}
-          activeLayer={activeLayer}
-          onLayerChange={(layer) => {
-            setActiveLayer(layer);
+          constraints={constraints}
+          onConstraintsChange={setConstraints}
+          gibsLayer={gibsLayer}
+          onGibsLayerChange={(layer) => {
+            setGibsLayer(layer);
             setViewMode('map');
           }}
-          showGibsOverlay={showGibsOverlay}
-          onToggleGibsOverlay={() => setShowGibsOverlay((v) => !v)}
           analysis={analysis}
         />
 
@@ -186,8 +231,7 @@ export function App() {
                 center={mapCenter}
                 zoom={mapZoom}
                 analysis={analysis}
-                activeLayer={activeLayer}
-                showGibsOverlay={showGibsOverlay}
+                gibsLayer={gibsLayer}
                 isDrawing={isDrawing}
                 onStartDrawing={() => setIsDrawing(true)}
                 onCancelDrawing={() => setIsDrawing(false)}
@@ -209,11 +253,16 @@ export function App() {
             <div className="stage-scroll">
               <CropDashboard
                 analysis={analysis}
+                cropsCatalog={cropsCatalog}
+                onUpdateCropParam={handleUpdateCropParam}
                 currentCrop={currentCrop}
                 onCropChange={setCurrentCrop}
+                cropHistoryNote={cropHistoryNote}
+                onCropHistoryChange={setCropHistoryNote}
                 climateStress={climateStress}
                 onClimateStressChange={setClimateStress}
                 scenarios={scenarios}
+                sensitivity={sensitivity}
                 isLoading={isLoading}
               />
             </div>
@@ -226,6 +275,16 @@ export function App() {
           )}
         </main>
       </div>
+
+      {/* Footer Attribution */}
+      <footer className="app-footer">
+        <span>
+          Equipe <strong>Lösungsjäger</strong> • NASA Space Apps Challenge 2026 (Lajeado, RS) • 14/11/2026
+        </span>
+        <span>
+          Ferramenta de apoio à decisão — não substitui análise laboratorial de solo nem recomendação agronômica.
+        </span>
+      </footer>
     </div>
   );
 }

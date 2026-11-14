@@ -1,92 +1,136 @@
 import {
-  CloudRain,
-  Droplets,
+  CheckSquare,
   Layers,
   Leaf,
-  Mountain,
   Satellite,
   Sliders,
-  Thermometer,
 } from 'lucide-react';
-import { CROPS_CATALOG } from '../data/localAgroData';
 import type {
-  ActiveLayer,
   CropId,
+  CropInfo,
   FarmAnalysis,
+  FarmerConstraints,
   FarmerPriorities,
+  GibsLayerId,
 } from '../types/agro';
 
 interface ControlSidebarProps {
+  cropsCatalog: Record<CropId, CropInfo>;
   currentCrop: CropId;
   onCropChange: (crop: CropId) => void;
   priorities: FarmerPriorities;
   onPrioritiesChange: (next: FarmerPriorities) => void;
-  activeLayer: ActiveLayer;
-  onLayerChange: (layer: ActiveLayer) => void;
-  showGibsOverlay: boolean;
-  onToggleGibsOverlay: () => void;
+  constraints: FarmerConstraints;
+  onConstraintsChange: (next: FarmerConstraints) => void;
+  gibsLayer: GibsLayerId;
+  onGibsLayerChange: (layer: GibsLayerId) => void;
   analysis: FarmAnalysis | null;
 }
 
-const LAYER_OPTIONS: {
-  id: ActiveLayer;
-  label: string;
-  source: string;
-  icon: typeof Droplets;
-}[] = [
-  { id: 'moisture', label: 'Umidade do Solo', source: 'SMAP', icon: Droplets },
-  { id: 'ndvi', label: 'Vegetação (NDVI)', source: 'MODIS', icon: Leaf },
-  { id: 'erosion', label: 'Risco de Erosão', source: 'SRTM + GPM', icon: Mountain },
-  { id: 'temperature', label: 'Temp. Superfície', source: 'ECOSTRESS', icon: Thermometer },
+const GIBS_OPTIONS: { id: GibsLayerId; label: string; scale: string }[] = [
+  { id: 'none', label: 'Apenas imagem base', scale: 'Esri' },
+  { id: 'modis_ndvi', label: 'MODIS NDVI (8 dias)', scale: '250 m' },
+  { id: 'smap_l4', label: 'SMAP L4 Zona Radicular', scale: '9 km' },
+  { id: 'gpm_imerg', label: 'GPM IMERG Precipitação', scale: '10 km' },
 ];
 
 export function ControlSidebar({
+  cropsCatalog,
   currentCrop,
   onCropChange,
   priorities,
   onPrioritiesChange,
-  activeLayer,
-  onLayerChange,
-  showGibsOverlay,
-  onToggleGibsOverlay,
+  constraints,
+  onConstraintsChange,
+  gibsLayer,
+  onGibsLayerChange,
   analysis,
 }: ControlSidebarProps) {
   const updatePriority = (key: keyof FarmerPriorities, value: number) => {
     onPrioritiesChange({ ...priorities, [key]: value });
   };
 
+  const wWater = Math.max(5, priorities.lessWater);
+  const wIncome = Math.max(5, priorities.moreIncome);
+  const wSoil = Math.max(5, priorities.improveSoil + priorities.reduceErosion * 0.6);
+  const wTotal = wWater + wIncome + wSoil;
+
   return (
-    <aside className="control-sidebar" aria-label="Configurações da Fazenda e Camadas NASA">
-      {/* 1. Current Crop */}
+    <aside className="control-sidebar" aria-label="Configurações do talhão">
+      {/* 1. Crop Selection */}
       <div className="sidebar-section">
         <div className="section-title">
-          <Leaf size={15} />
-          <span>Cultura Atual no Talhão</span>
+          <Leaf size={14} />
+          <span>Cultura atual (editável)</span>
         </div>
-        <div className="crop-pills">
-          {(Object.keys(CROPS_CATALOG) as CropId[]).map((id) => (
-            <button
-              key={id}
-              type="button"
-              className={`crop-pill ${currentCrop === id ? 'active' : ''}`}
-              onClick={() => onCropChange(id)}
-            >
-              {CROPS_CATALOG[id].name}
-            </button>
+        <select
+          aria-label="Cultura atual"
+          className="sidebar-select"
+          value={currentCrop}
+          onChange={(e) => onCropChange(e.target.value as CropId)}
+        >
+          {(Object.keys(cropsCatalog) as CropId[]).map((id) => (
+            <option key={id} value={id}>
+              {cropsCatalog[id].name} (Kc {cropsCatalog[id].kc})
+            </option>
           ))}
+        </select>
+      </div>
+
+      {/* 2. Constraints */}
+      <div className="sidebar-section">
+        <div className="section-title">
+          <CheckSquare size={14} />
+          <span>Restrições da propriedade</span>
+        </div>
+        <div className="constraints-list">
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={constraints.hasIrrigation}
+              onChange={(e) =>
+                onConstraintsChange({ ...constraints, hasIrrigation: e.target.checked })
+              }
+            />
+            <span>Possui irrigação suplementar</span>
+          </label>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={constraints.hasNoTillPlanter}
+              onChange={(e) =>
+                onConstraintsChange({ ...constraints, hasNoTillPlanter: e.target.checked })
+              }
+            />
+            <span>Maquinário de plantio direto</span>
+          </label>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={constraints.hasLivestock}
+              onChange={(e) =>
+                onConstraintsChange({ ...constraints, hasLivestock: e.target.checked })
+              }
+            />
+            <span>Integração com gado / leite</span>
+          </label>
         </div>
       </div>
 
-      {/* 2. Farmer Priorities */}
+      {/* 3. Farmer Priorities with explicit weights */}
       <div className="sidebar-section">
         <div className="section-title">
-          <Sliders size={15} />
-          <span>Prioridades do Agricultor</span>
+          <Sliders size={14} />
+          <span>Prioridades e pesos do score</span>
+        </div>
+        <div className="weights-summary">
+          Pesos: Água {Math.round((wWater / wTotal) * 100)}% • Renda{' '}
+          {Math.round((wIncome / wTotal) * 100)}% • Solo {Math.round((wSoil / wTotal) * 100)}%
         </div>
         <div className="priority-sliders">
           <label className="slider-row">
             <div className="slider-header">
-              <span>Economizar Água</span>
+              <span>Economizar água</span>
               <span className="slider-val">{priorities.lessWater}%</span>
             </div>
             <input
@@ -100,7 +144,7 @@ export function ControlSidebar({
 
           <label className="slider-row">
             <div className="slider-header">
-              <span>Mais Renda / Rendimento</span>
+              <span>Renda / rendimento</span>
               <span className="slider-val">{priorities.moreIncome}%</span>
             </div>
             <input
@@ -114,7 +158,7 @@ export function ControlSidebar({
 
           <label className="slider-row">
             <div className="slider-header">
-              <span>Melhorar Saúde do Solo</span>
+              <span>Cobertura e solo</span>
               <span className="slider-val">{priorities.improveSoil}%</span>
             </div>
             <input
@@ -128,7 +172,7 @@ export function ControlSidebar({
 
           <label className="slider-row">
             <div className="slider-header">
-              <span>Reduzir Risco de Erosão</span>
+              <span>Conter erosão</span>
               <span className="slider-val">{priorities.reduceErosion}%</span>
             </div>
             <input
@@ -142,110 +186,100 @@ export function ControlSidebar({
         </div>
       </div>
 
-      {/* 3. Map Layers */}
+      {/* 4. Live NASA GIBS Map Layer */}
       <div className="sidebar-section">
         <div className="section-title">
-          <Layers size={15} />
-          <span>Camadas Harmonizadas (500 m)</span>
+          <Layers size={14} />
+          <span>Camada NASA GIBS (ao vivo)</span>
         </div>
         <div className="layer-buttons">
-          {LAYER_OPTIONS.map((layer) => {
-            const Icon = layer.icon;
-            return (
-              <button
-                key={layer.id}
-                type="button"
-                id={`layer-btn-${layer.id}`}
-                className={`layer-btn ${activeLayer === layer.id ? 'active' : ''}`}
-                onClick={() => onLayerChange(layer.id)}
-              >
-                <Icon size={15} />
-                <div className="layer-btn-text">
-                  <span>{layer.label}</span>
-                  <small>{layer.source}</small>
-                </div>
-              </button>
-            );
-          })}
+          {GIBS_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              className={`layer-btn ${gibsLayer === opt.id ? 'active' : ''}`}
+              onClick={() => onGibsLayerChange(opt.id)}
+            >
+              <div className="layer-btn-text">
+                <span>{opt.label}</span>
+                <small>{opt.scale}</small>
+              </div>
+            </button>
+          ))}
         </div>
-
-        <label className="gibs-toggle">
-          <input
-            type="checkbox"
-            checked={showGibsOverlay}
-            onChange={onToggleGibsOverlay}
-          />
-          <span>Sobrepor MODIS NDVI global (NASA GIBS)</span>
-        </label>
       </div>
 
-      {/* 4. Extracted NASA & Soil Telemetry */}
+      {/* 5. Field Indicators: Measured vs Derived */}
       {analysis && (
-        <div className="sidebar-section telemetry-section">
+        <div className="sidebar-section">
           <div className="section-title">
-            <Satellite size={15} />
-            <span>Médias Extraídas no Polígono</span>
+            <Satellite size={14} />
+            <span>Indicadores do talhão</span>
             <span
-              className={`source-badge ${analysis.nasa.sourceMode}`}
-              title={
-                analysis.nasa.sourceMode === 'live-power'
-                  ? 'NASA POWER API em tempo real'
-                  : 'Modelo climático local'
-              }
+              className={`prov-badge ${
+                analysis.indicators.powerSource === 'live-daily' ? 'medido' : 'derivado'
+              }`}
             >
-              {analysis.nasa.sourceMode === 'live-power' ? 'POWER Live' : 'Híbrido'}
+              {analysis.indicators.powerSource === 'live-daily'
+                ? 'POWER medido'
+                : 'Offline (estimado)'}
             </span>
           </div>
 
           <div className="telemetry-grid">
-            <div className="telemetry-card">
-              <span className="tel-label">POWER Clima</span>
+            <div className="telemetry-card measured">
+              <span className="tel-label">POWER T média / Chuva</span>
               <strong className="tel-val">
-                {analysis.nasa.power.avgTempC}°C • {analysis.nasa.power.annualPrecipMm}mm
+                {analysis.indicators.annualAvgTempC}°C • {analysis.indicators.annualMeanPrecipMm}mm
               </strong>
-              <small>ET: {analysis.nasa.power.evapotranspirationMmDay} mm/d</small>
+              <small>Medido ({analysis.indicators.powerPeriod})</small>
             </div>
 
-            <div className="telemetry-card">
-              <span className="tel-label">SMAP Umidade</span>
-              <strong className="tel-val">{analysis.nasa.smap.soilMoisturePct}%</strong>
-              <small>{analysis.nasa.smap.rootZoneStatus}</small>
+            <div className="telemetry-card measured">
+              <span className="tel-label">Geada / Chuva P95</span>
+              <strong className="tel-val">
+                {analysis.indicators.frostDaysPerYear}d • {analysis.indicators.extremeRainDaysPerYear}d/ano
+              </strong>
+              <small>Medido (Tmin ≤ 2°C / P95)</small>
             </div>
 
-            <div className="telemetry-card">
-              <span className="tel-label">ECOSTRESS LST</span>
-              <strong className="tel-val">{analysis.nasa.ecostress.surfaceTempC}°C</strong>
-              <small>{analysis.nasa.ecostress.heatStressDays} dias quentes</small>
+            <div className="telemetry-card estimated">
+              <span className="tel-label">ET₀ / Déficit sazonal</span>
+              <strong className="tel-val">
+                {analysis.indicators.meanEt0MmDay} mm/d • {analysis.indicators.seasonalWaterDeficitMm} mm
+              </strong>
+              <small>Derivado (Hargreaves)</small>
             </div>
 
-            <div className="telemetry-card">
-              <span className="tel-label">MODIS NDVI</span>
-              <strong className="tel-val">{analysis.nasa.modis.meanNdvi}</strong>
-              <small>Exposto: {analysis.nasa.modis.bareSoilMonths}</small>
-            </div>
-
-            <div className="telemetry-card">
-              <span className="tel-label">
-                <CloudRain size={11} /> GPM 90d
-              </span>
-              <strong className="tel-val">{analysis.nasa.gpm.accumulatedRain90dMm} mm</strong>
-              <small>Anomalia {analysis.nasa.gpm.rainAnomalyPct}%</small>
-            </div>
-
-            <div className="telemetry-card">
-              <span className="tel-label">Erosão (USLE)</span>
-              <strong className="tel-val">{analysis.nasa.erosion.riskIndex}/100</strong>
-              <small>Nível {analysis.nasa.erosion.riskLevel}</small>
+            <div className="telemetry-card estimated">
+              <span className="tel-label">Índice de erosão</span>
+              <strong className="tel-val">
+                {analysis.indicators.estimatedErosionIndex}/100 ({analysis.indicators.erosionLevel})
+              </strong>
+              <small>Derivado (solo + chuva)</small>
             </div>
           </div>
 
           <div className="soil-box">
-            <strong>Solo Local ({analysis.soil.municipality}):</strong>
+            <strong>Solo ({analysis.soil.municipality})</strong>
             <p>
-              {analysis.soil.soilClass} — {analysis.soil.texture}. MO:{' '}
-              {analysis.soil.organicMatterPct}%, Retenção:{' '}
-              {analysis.soil.waterRetentionCapacity}.
+              {analysis.soil.soilClass} ({analysis.soil.texture}) • AWC {analysis.soil.availableWaterCapacityMm} mm •{' '}
+              <em>{analysis.soil.dataSourceLabel}</em>
             </p>
+          </div>
+
+          <div className="cmr-box">
+            <span className="cmr-title">Catálogo NASA CMR no polígono:</span>
+            {analysis.indicators.cmrGranules.map((g) => (
+              <div key={g.shortName} className="cmr-row">
+                <span>{g.dataset}</span>
+                <span className="cmr-val">
+                  {g.status === 'ok'
+                    ? `${g.granuleCount} cenas (${g.latestDate ?? 's/d'})`
+                    : 'indisponível'}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       )}

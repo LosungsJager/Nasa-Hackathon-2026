@@ -7,76 +7,43 @@ interface MethodologyViewProps {
 
 const DATASETS_TABLE = [
   {
-    name: 'NASA POWER (Agrometeorologia)',
+    name: 'NASA POWER (Daily AG)',
     nativeScale: '~50 km (0,5°)',
-    scope: 'Contexto Regional',
-    role: 'Série histórica diária (chuva, temperatura, ET₀) para simular 20 safras e risco de geada.',
-    confidence: 'Alta (clima regional)',
+    status: 'Medido (API ao vivo)',
+    role: 'Série diária 2005–2024 (T2M, T2M_MIN, PRECTOTCORR, radiação) para balanço hídrico, geada e chuva P95.',
   },
   {
-    name: 'NASA SMAP L4 (Umidade do Solo)',
-    nativeScale: '9 km',
-    scope: 'Contexto Regional',
-    role: 'Umidade na zona radicular e anomalia hídrica da safra atual vs. climatologia.',
-    confidence: 'Média (para minifúndios)',
+    name: 'NASA GIBS WMTS',
+    nativeScale: '250 m (MODIS) / 9 km (SMAP) / 10 km (GPM)',
+    status: 'Medido (Tiles ao vivo)',
+    role: 'Visualização espacial no mapa sem reamostragem artificial.',
   },
   {
-    name: 'NASA GPM IMERG (Precipitação)',
-    nativeScale: '10 km (0,1°)',
-    scope: 'Contexto Regional',
-    role: 'Chuva acumulada recente (90 dias) e detecção de eventos extremos (P95).',
-    confidence: 'Alta',
+    name: 'NASA CMR (SMAP L4, ECOSTRESS, SRTM)',
+    nativeScale: '9 km / 70 m / 30 m',
+    status: 'Metadados ao vivo',
+    role: 'Consulta de cenas disponíveis no polígono via CMR Search API.',
   },
   {
-    name: 'MODIS / NASA HLS (NDVI)',
-    nativeScale: '30 m (HLS) / 250 m (MODIS)',
-    scope: 'Dentro da Fazenda',
-    role: 'Única camada de vigor vegetativo intra-talhão e detecção de meses com solo exposto.',
-    confidence: 'Alta',
-  },
-  {
-    name: 'SRTM / NASADEM (Relevo)',
-    nativeScale: '30 m',
-    scope: 'Dentro da Fazenda',
-    role: 'Declividade combinada com GPM e NDVI para estimar risco de erosão laminar (USLE).',
-    confidence: 'Alta',
-  },
-  {
-    name: 'ECOSTRESS (Temp. Superfície)',
-    nativeScale: '~70 m',
-    scope: 'Evidência Opcional',
-    role: 'Identifica ilhas de calor e estresse térmico no dossel em dias de passagem limpa.',
-    confidence: 'Média (passagens irregulares)',
-  },
-  {
-    name: 'Solos & Culturas Locais',
-    nativeScale: '250 m / Municipal',
-    scope: 'Adaptador Local / Global',
-    role: 'Embrapa/MapBiomas (BR), USDA SSURGO/CDL (EUA) ou SoilGrids/WorldCover (Global).',
-    confidence: 'Variável por região',
+    name: 'Solo & Culturas Locais',
+    nativeScale: 'Municipal / Tabela',
+    status: 'Premissa (editável)',
+    role: 'AWC, MO%, Kc (FAO-56), Ky (FAO-33), fixação de N (Embrapa) e preços (CONAB/EMATER).',
   },
 ];
 
 const GLOSSARY = [
   {
     term: 'ET₀ / ETc (Evapotranspiração)',
-    meaning:
-      'Quantidade de água que sai do solo e das plantas para a atmosfera. Culturas com Kc menor consomem menos água.',
+    meaning: 'Água consumida pela cultura. Calculada por Hargreaves a partir de T2M, Tmin e radiação solar do POWER.',
   },
   {
-    term: 'NDVI (Índice de Vegetação)',
-    meaning:
-      'Mede o "verde" e o vigor das plantas por satélite (0 a 1). Valores abaixo de 0,35 indicam solo descoberto.',
+    term: 'P10 / P50 / P90 (Backtest 2005–2024)',
+    meaning: 'P50 é a mediana em 20 safras; P10 mostra o pior cenário (seca ou chuva extrema).',
   },
   {
-    term: 'P10 / P50 / P90 (Backtest)',
-    meaning:
-      'P50 é o resultado mediano em 20 safras; P10 mostra o pior cenário (ano de seca severa ou enchente) — é a medida do risco real.',
-  },
-  {
-    term: 'Risco de Quebra (< 60%)',
-    meaning:
-      'Percentual de anos nos últimos 20 anos em que a simulação ficou abaixo de 60% do potencial produtivo da cultura.',
+    term: 'Índices comparativos (0–100)',
+    meaning: 'Índices normalizados para comparar as 4 rotações entre si conforme os pesos dos sliders (Água, Renda, Solo).',
   },
 ];
 
@@ -87,9 +54,9 @@ export function MethodologyView({ analysis }: MethodologyViewProps) {
         <div className="meth-hero-title">
           <Scale size={18} className="accent-leaf" />
           <div>
-            <h2>Escalas Nativas &amp; Modelo FAO-56</h2>
+            <h2>Escalas Nativas, Limitações e Modelo FAO-56</h2>
             <p>
-              Cada camada NASA opera na sua resolução original, sem interpolação artificial.
+              Separação explícita entre dado medido (NASA POWER/GIBS/CMR), dado derivado (balanço hídrico) e premissas da literatura.
             </p>
           </div>
         </div>
@@ -97,48 +64,35 @@ export function MethodologyView({ analysis }: MethodologyViewProps) {
           <div className="meth-active-adapter">
             <Globe size={15} />
             <span>
-              Adaptador ativo: <strong>{analysis.soil.dataSourceLabel}</strong> (Confiança:{' '}
+              Adaptador de solo ativo: <strong>{analysis.soil.dataSourceLabel}</strong> (Confiança:{' '}
               {analysis.soil.confidenceLevel})
             </span>
           </div>
         )}
       </div>
 
-      {/* Datasets Table */}
       <div className="dash-card">
         <div className="section-title">
           <Database size={15} />
-          <span>Fontes NASA & Adaptadores Locais</span>
+          <span>Fontes de dados e estado atual da integração</span>
         </div>
         <div className="meth-table-wrap">
           <table className="meth-table">
             <thead>
               <tr>
-                <th>Camada / Fonte</th>
-                <th>Escala Nativa</th>
-                <th>Abrangência</th>
-                <th>Papel no Motor</th>
-                <th>Confiança</th>
+                <th>Fonte</th>
+                <th>Escala nativa</th>
+                <th>Estado</th>
+                <th>Uso no sistema</th>
               </tr>
             </thead>
             <tbody>
               {DATASETS_TABLE.map((row) => (
                 <tr key={row.name}>
-                  <td>
-                    <strong>{row.name}</strong>
-                  </td>
+                  <td><strong>{row.name}</strong></td>
                   <td className="mono-cell">{row.nativeScale}</td>
-                  <td>
-                    <span
-                      className={`scope-badge ${
-                        row.scope === 'Dentro da Fazenda' ? 'farm' : 'regional'
-                      }`}
-                    >
-                      {row.scope}
-                    </span>
-                  </td>
+                  <td>{row.status}</td>
                   <td>{row.role}</td>
-                  <td>{row.confidence}</td>
                 </tr>
               ))}
             </tbody>
@@ -146,29 +100,44 @@ export function MethodologyView({ analysis }: MethodologyViewProps) {
         </div>
       </div>
 
-      {/* Equation + Glossary */}
       <div className="dash-two-col">
         <div className="dash-card">
           <div className="section-title">
             <Info size={15} />
-            <span>Como Calculamos o Risco (FAO-56 + FAO-33)</span>
+            <span>Equações (FAO-56 e FAO-33) e Limitações</span>
           </div>
           <p className="meth-prose">
-            Para cada um dos 3 cenários de rotação, simulamos 20 safras (2006–2025) usando a chuva sazonal, a evapotranspiração de referência (<code>ET₀</code> da NASA POWER) e o coeficiente da cultura (<code>Kc</code>):
+            Referências:{' '}
+            <a
+              href="https://www.fao.org/3/x0490e/x0490e00.htm"
+              target="_blank"
+              rel="noreferrer"
+            >
+              FAO Irrigation and Drainage Paper 56
+            </a>{' '}
+            e{' '}
+            <a
+              href="https://www.fao.org/3/i2800e/i2800e00.htm"
+              target="_blank"
+              rel="noreferrer"
+            >
+              FAO-33 (Yield Response to Water)
+            </a>
+            .
           </p>
           <div className="formula-box">
             <code>ETc = Kc × ET₀</code>
             <code>Produtividade Relativa = 1 − Ky × (1 − ETa / ETc)</code>
           </div>
           <p className="meth-prose">
-            Em anos de chuva extrema (como 2024 no RS), culturas sem cobertura sofrem penalidade adicional por erosão e encharcamento. O resultado gera a distribuição <strong>P10 / P50 / P90</strong> e a <strong>probabilidade de quebra</strong>.
+            <strong>Limitações declaradas:</strong> (1) Validação estatística contra quebra histórica municipal (IBGE-PAM / EMATER-RS) ainda não executada; (2) GRACE (armazenamento regional de água, ~300 km) previsto como próximo passo; (3) Leituras locais de pluviômetro e análise de solo (0–20 cm) devem ser levadas ao agrônomo para calibração.
           </p>
         </div>
 
         <div className="dash-card">
           <div className="section-title">
             <BookOpen size={15} />
-            <span>Glossário Rápido para o Produtor</span>
+            <span>Glossário</span>
           </div>
           <div className="glossary-list">
             {GLOSSARY.map((item) => (
