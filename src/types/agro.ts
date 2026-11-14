@@ -107,6 +107,19 @@ export interface FieldIndicators {
   erosionLevel: 'Baixo' | 'Moderado' | 'Alto';
   meanElevationM?: number;       // Medido (DEM 90m / Open-Meteo Elevation)
   slopePct?: number;             // Derivado (gradiente altimétrico no polígono)
+  era5Summary?: {
+    period: string;
+    meanTempC: number;
+    totalPrecipMm: number;
+    meanEt0MmDay: number;
+    status: 'ok' | 'offline';
+  };
+  sentinel2Summary?: {
+    sceneCount: number;
+    latestDate: string | null;
+    latestCloudPct: number | null;
+    status: 'ok' | 'offline';
+  };
   cmrGranules: CmrGranuleSummary[];
 }
 

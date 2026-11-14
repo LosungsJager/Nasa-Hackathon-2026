@@ -286,6 +286,96 @@ async function fetchPolygonSlope(
   }
 }
 
+async function fetchSentinel2Stac(
+  bbox: [number, number, number, number]
+): Promise<FieldIndicators['sentinel2Summary']> {
+  const [w, s, e, n] = bbox;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4500);
+  try {
+    const url = `https://earth-search.aws.element84.com/v1/search?collections=sentinel-2-l2a&bbox=${w.toFixed(
+      4
+    )},${s.toFixed(4)},${e.toFixed(4)},${n.toFixed(4)}&limit=1`;
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error('Sentinel-2 STAC error');
+    const json = (await res.json()) as {
+      numberMatched?: number;
+      features?: {
+        properties?: { datetime?: string; 'eo:cloud_cover'?: number };
+      }[];
+    };
+    const feat = json.features?.[0];
+    return {
+      sceneCount: json.numberMatched ?? json.features?.length ?? 0,
+      latestDate: feat?.properties?.datetime?.slice(0, 10) ?? null,
+      latestCloudPct:
+        typeof feat?.properties?.['eo:cloud_cover'] === 'number'
+          ? Math.round(feat.properties['eo:cloud_cover'])
+          : null,
+      status: 'ok',
+    };
+  } catch {
+    clearTimeout(timeoutId);
+    return { sceneCount: 0, latestDate: null, latestCloudPct: null, status: 'offline' };
+  }
+}
+
+async function fetchEra5Validation(
+  lat: number,
+  lng: number
+): Promise<FieldIndicators['era5Summary']> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4500);
+  try {
+    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat.toFixed(
+      4
+    )}&longitude=${lng.toFixed(
+      4
+    )}&start_date=2024-01-01&end_date=2024-12-31&daily=temperature_2m_mean,precipitation_sum,et0_fao_evapotranspiration&models=era5`;
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error('ERA5 HTTP error');
+    const json = (await res.json()) as {
+      daily?: {
+        temperature_2m_mean?: (number | null)[];
+        precipitation_sum?: (number | null)[];
+        et0_fao_evapotranspiration?: (number | null)[];
+      };
+    };
+    const temps = (json.daily?.temperature_2m_mean ?? []).filter(
+      (v): v is number => typeof v === 'number' && Number.isFinite(v)
+    );
+    const rains = (json.daily?.precipitation_sum ?? []).filter(
+      (v): v is number => typeof v === 'number' && Number.isFinite(v)
+    );
+    const et0s = (json.daily?.et0_fao_evapotranspiration ?? []).filter(
+      (v): v is number => typeof v === 'number' && Number.isFinite(v)
+    );
+    if (temps.length === 0) throw new Error('Empty ERA5 series');
+
+    return {
+      period: '2024 (ERA5 diário)',
+      meanTempC: Number((temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1)),
+      totalPrecipMm: Math.round(rains.reduce((a, b) => a + b, 0)),
+      meanEt0MmDay:
+        et0s.length > 0
+          ? Number((et0s.reduce((a, b) => a + b, 0) / et0s.length).toFixed(2))
+          : 0,
+      status: 'ok',
+    };
+  } catch {
+    clearTimeout(timeoutId);
+    return {
+      period: '2024 (ERA5 diário)',
+      meanTempC: 0,
+      totalPrecipMm: 0,
+      meanEt0MmDay: 0,
+      status: 'offline',
+    };
+  }
+}
+
 export async function analyzeFarmPolygon(
   latLngCoords: [number, number][]
 ): Promise<FarmAnalysis> {
@@ -303,14 +393,28 @@ export async function analyzeFarmPolygon(
   const [centLng, centLat] = centroidFeat.geometry.coordinates;
   const bbox = turf.bbox(polygonGeoJson) as [number, number, number, number];
 
-  const [powerRes, soil, demRes, smapL4Cmr, smapL3Cmr, ecoCmr, srtmCmr] = await Promise.all([
+  const [
+    powerRes,
+    soil,
+    demRes,
+    era5Res,
+    sentinel2Res,
+    smapL4Cmr,
+    smapL3Cmr,
+    ecoCmr,
+    srtmCmr,
+    gediCmr,
+  ] = await Promise.all([
     fetchNasaPowerDaily(centLat, centLng),
     fetchSoilProfile(centLat, centLng),
     fetchPolygonSlope(bbox, centLat, centLng),
+    fetchEra5Validation(centLat, centLng),
+    fetchSentinel2Stac(bbox),
     queryCmrGranule('SMAP L4 Zona Radicular', 'SPL4SMGP', bbox),
     queryCmrGranule('SMAP L3 Superficial 9km', 'SPL3SMP_E', bbox),
     queryCmrGranule('ECOSTRESS LST 70m', 'ECO_L2T_LSTE', bbox),
     queryCmrGranule('SRTM Elevação 30m', 'SRTMGL1', bbox),
+    queryCmrGranule('GEDI L4A Biomassa', 'GEDI_L4A_AGB_Density_V2_1_2056', bbox),
   ]);
 
   const days = powerRes.days;
@@ -386,7 +490,9 @@ export async function analyzeFarmPolygon(
       estimatedErosionIndex >= 60 ? 'Alto' : estimatedErosionIndex >= 35 ? 'Moderado' : 'Baixo',
     meanElevationM: demRes.meanElevationM,
     slopePct: demRes.slopePct,
-    cmrGranules: [smapL4Cmr, smapL3Cmr, ecoCmr, srtmCmr],
+    era5Summary: era5Res,
+    sentinel2Summary: sentinel2Res,
+    cmrGranules: [smapL4Cmr, smapL3Cmr, ecoCmr, srtmCmr, gediCmr],
   };
 
   return {

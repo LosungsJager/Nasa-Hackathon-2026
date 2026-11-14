@@ -241,7 +241,7 @@ export function ControlSidebar({
           </div>
 
           <div className="cmr-box">
-            <span className="cmr-title">Catálogo NASA CMR:</span>
+            <span className="cmr-title">Catálogo NASA CMR &amp; Copernicus:</span>
             {analysis.indicators.cmrGranules.map((g) => (
               <div key={g.shortName} className="cmr-row">
                 <span>{g.dataset}</span>
@@ -252,6 +252,26 @@ export function ControlSidebar({
                 </span>
               </div>
             ))}
+            {analysis.indicators.sentinel2Summary && (
+              <div className="cmr-row">
+                <span>Sentinel-2 L2A (10m)</span>
+                <span className="cmr-val">
+                  {analysis.indicators.sentinel2Summary.status === 'ok'
+                    ? `${analysis.indicators.sentinel2Summary.sceneCount} (${analysis.indicators.sentinel2Summary.latestDate ?? 's/d'})`
+                    : 'offline'}
+                </span>
+              </div>
+            )}
+            {analysis.indicators.era5Summary && (
+              <div className="cmr-row">
+                <span>ECMWF ERA5 (2024)</span>
+                <span className="cmr-val">
+                  {analysis.indicators.era5Summary.status === 'ok'
+                    ? `${analysis.indicators.era5Summary.meanTempC}°C • ${analysis.indicators.era5Summary.totalPrecipMm}mm`
+                    : 'offline'}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
