@@ -49,8 +49,8 @@ export function App() {
     tempDeltaC: 0,
   });
 
-  const [nasaBasemap, setNasaBasemap] = useState<NasaBasemapId>('viirs_truecolor');
-  const [gibsLayer, setGibsLayer] = useState<GibsLayerId>('modis_ndvi');
+  const [nasaBasemap, setNasaBasemap] = useState<NasaBasemapId>('hybrid_hd');
+  const [gibsLayer, setGibsLayer] = useState<GibsLayerId>('none');
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
 
   const [analysis, setAnalysis] = useState<FarmAnalysis | null>(null);

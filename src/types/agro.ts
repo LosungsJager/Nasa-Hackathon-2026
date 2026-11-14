@@ -1,6 +1,11 @@
 export type GibsLayerId = 'none' | 'modis_ndvi' | 'smap_l4' | 'gpm_imerg';
 
-export type NasaBasemapId = 'viirs_truecolor' | 'modis_truecolor' | 'bluemarble';
+export type NasaBasemapId =
+  | 'hybrid_hd'
+  | 'osm_streets'
+  | 'viirs_truecolor'
+  | 'modis_truecolor'
+  | 'bluemarble';
 
 export type AppViewMode = 'map' | 'crops' | 'methodology';
 

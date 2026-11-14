@@ -25,13 +25,15 @@ interface ControlSidebarProps {
 }
 
 const NASA_BASEMAP_OPTIONS: { id: NasaBasemapId; label: string; scale: string }[] = [
-  { id: 'viirs_truecolor', label: 'VIIRS True Color', scale: '375 m' },
-  { id: 'modis_truecolor', label: 'MODIS True Color', scale: '250 m' },
-  { id: 'bluemarble', label: 'Blue Marble NASA', scale: '500 m' },
+  { id: 'hybrid_hd', label: 'Satélite HD + Ruas', scale: 'Zoom 18' },
+  { id: 'osm_streets', label: 'Mapa de Ruas (OSM)', scale: 'Zoom 19' },
+  { id: 'viirs_truecolor', label: 'NASA VIIRS True Color', scale: '375 m' },
+  { id: 'modis_truecolor', label: 'NASA MODIS True Color', scale: '250 m' },
+  { id: 'bluemarble', label: 'NASA Blue Marble', scale: '500 m' },
 ];
 
 const GIBS_OPTIONS: { id: GibsLayerId; label: string; scale: string }[] = [
-  { id: 'none', label: 'Sem sobreposição', scale: 'Base NASA' },
+  { id: 'none', label: 'Sem sobreposição', scale: 'Base nítida' },
   { id: 'modis_ndvi', label: 'MODIS NDVI (8d)', scale: '250 m' },
   { id: 'smap_l4', label: 'SMAP L4 Umidade', scale: '9 km' },
   { id: 'gpm_imerg', label: 'GPM IMERG Chuva', scale: '10 km' },

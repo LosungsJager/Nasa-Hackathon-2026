@@ -28,31 +28,90 @@ function getRecentGibsDate(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function getBasemapTileConfig(basemap: NasaBasemapId): {
-  url: string;
-  maxNativeZoom: number;
-  attribution: string;
-} {
+function addBasemapToGroup(group: L.LayerGroup, basemap: NasaBasemapId) {
   const dateStr = getRecentGibsDate();
+
+  if (basemap === 'hybrid_hd') {
+    L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      {
+        maxZoom: 18,
+        attribution: 'Esri World Imagery & Ruas | Dados NASA POWER & GIBS',
+        zIndex: 1,
+      }
+    ).addTo(group);
+
+    L.tileLayer(
+      'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',
+      {
+        maxZoom: 18,
+        opacity: 0.9,
+        zIndex: 20,
+      }
+    ).addTo(group);
+
+    L.tileLayer(
+      'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      {
+        maxZoom: 18,
+        opacity: 0.9,
+        zIndex: 21,
+      }
+    ).addTo(group);
+    return;
+  }
+
+  if (basemap === 'osm_streets') {
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap | Dados NASA POWER & GIBS',
+      zIndex: 1,
+    }).addTo(group);
+    return;
+  }
+
+  // NASA GIBS regional basemaps (zoom 1–9 nativo)
   if (basemap === 'modis_truecolor') {
-    return {
-      url: `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${dateStr}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
-      maxNativeZoom: 9,
-      attribution: 'NASA GIBS (MODIS Terra True Color)',
-    };
+    L.tileLayer(
+      `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${dateStr}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
+      {
+        maxNativeZoom: 9,
+        maxZoom: 18,
+        attribution: 'NASA GIBS (MODIS Terra True Color)',
+        zIndex: 1,
+      }
+    ).addTo(group);
+  } else if (basemap === 'bluemarble') {
+    L.tileLayer(
+      'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_NextGeneration/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg',
+      {
+        maxNativeZoom: 8,
+        maxZoom: 18,
+        attribution: 'NASA GIBS (Blue Marble Next Generation)',
+        zIndex: 1,
+      }
+    ).addTo(group);
+  } else {
+    L.tileLayer(
+      `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/${dateStr}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
+      {
+        maxNativeZoom: 9,
+        maxZoom: 18,
+        attribution: 'NASA GIBS (VIIRS SNPP True Color)',
+        zIndex: 1,
+      }
+    ).addTo(group);
   }
-  if (basemap === 'bluemarble') {
-    return {
-      url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_NextGeneration/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg',
-      maxNativeZoom: 8,
-      attribution: 'NASA GIBS (Blue Marble Next Generation)',
-    };
-  }
-  return {
-    url: `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/${dateStr}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
-    maxNativeZoom: 9,
-    attribution: 'NASA GIBS (VIIRS SNPP True Color)',
-  };
+
+  L.tileLayer(
+    'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Features_15m/default/GoogleMapsCompatible_Level9/{z}/{y}/{x}.png',
+    { maxNativeZoom: 9, maxZoom: 18, opacity: 0.7, zIndex: 20 }
+  ).addTo(group);
+
+  L.tileLayer(
+    'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Labels_15m/default/GoogleMapsCompatible_Level9/{z}/{y}/{x}.png',
+    { maxNativeZoom: 9, maxZoom: 18, opacity: 0.85, zIndex: 21 }
+  ).addTo(group);
 }
 
 function getGibsTileUrl(layer: GibsLayerId): string | null {
@@ -94,7 +153,7 @@ export function FarmMap({
   const mapRef = useRef<L.Map | null>(null);
   const polyLayerRef = useRef<L.LayerGroup | null>(null);
   const drawLayerRef = useRef<L.LayerGroup | null>(null);
-  const basemapTileRef = useRef<L.TileLayer | null>(null);
+  const basemapGroupRef = useRef<L.LayerGroup | null>(null);
   const gibsTileRef = useRef<L.TileLayer | null>(null);
 
   const [draftPoints, setDraftPoints] = useState<[number, number][]>([]);
@@ -124,34 +183,14 @@ export function FarmMap({
     const map = L.map(containerRef.current, {
       center,
       zoom,
-      maxZoom: 14,
+      maxZoom: 18,
       zoomControl: false,
     });
 
     map.attributionControl.setPrefix('NASA POWER & GIBS');
     L.control.zoom({ position: 'topright' }).addTo(map);
 
-    // NASA GIBS Reference Features & Labels (coastlines, borders, place names)
-    L.tileLayer(
-      'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Features_15m/default/GoogleMapsCompatible_Level9/{z}/{y}/{x}.png',
-      {
-        maxNativeZoom: 9,
-        maxZoom: 14,
-        opacity: 0.7,
-        zIndex: 20,
-      }
-    ).addTo(map);
-
-    L.tileLayer(
-      'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Labels_15m/default/GoogleMapsCompatible_Level9/{z}/{y}/{x}.png',
-      {
-        maxNativeZoom: 9,
-        maxZoom: 14,
-        opacity: 0.85,
-        zIndex: 21,
-      }
-    ).addTo(map);
-
+    basemapGroupRef.current = L.layerGroup().addTo(map);
     polyLayerRef.current = L.layerGroup().addTo(map);
     drawLayerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
@@ -162,28 +201,17 @@ export function FarmMap({
     };
   }, []);
 
-  // Update NASA GIBS Basemap
+  // Update Basemap layers
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    if (basemapTileRef.current) {
-      map.removeLayer(basemapTileRef.current);
-      basemapTileRef.current = null;
-    }
-
-    const cfg = getBasemapTileConfig(basemap);
-    basemapTileRef.current = L.tileLayer(cfg.url, {
-      maxNativeZoom: cfg.maxNativeZoom,
-      maxZoom: 14,
-      attribution: cfg.attribution,
-      zIndex: 1,
-    }).addTo(map);
+    const group = basemapGroupRef.current;
+    if (!group) return;
+    group.clearLayers();
+    addBasemapToGroup(group, basemap);
   }, [basemap]);
 
   useEffect(() => {
     if (!mapRef.current) return;
-    mapRef.current.flyTo(center, Math.min(zoom, 14), { duration: 0.8 });
+    mapRef.current.flyTo(center, zoom, { duration: 0.8 });
   }, [center, zoom]);
 
   // Update live NASA GIBS science overlay tile layer
@@ -200,9 +228,9 @@ export function FarmMap({
     if (url) {
       const maxNativeZoom = gibsLayer === 'modis_ndvi' ? 9 : 6;
       gibsTileRef.current = L.tileLayer(url, {
-        opacity: 0.62,
+        opacity: 0.38,
         maxNativeZoom,
-        maxZoom: 14,
+        maxZoom: 18,
         attribution: 'NASA GIBS | NASA POWER & CMR',
         zIndex: 10,
       }).addTo(map);
