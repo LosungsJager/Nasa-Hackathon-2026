@@ -44,6 +44,12 @@ function simulateDailyBucketBacktest(
   const rainMult = 1 + stress.rainDeltaPct / 100;
   const etMult = 1 + stress.tempDeltaC * 0.045;
 
+  // Estimate mean annual rainfall to initialize pre-season soil moisture realistically
+  const totalYears = Math.max(1, new Set(dailyClimate.map((d) => d.year)).size);
+  const meanAnnualRainMm =
+    dailyClimate.reduce((s, d) => s + d.precipMm * rainMult, 0) / totalYears;
+  const initMoistureFraction = clamp(meanAnnualRainMm / 1000, 0.02, 0.7);
+
   // Group daily records by year and filter main growing season months
   const byYear = new Map<number, DailyClimateDay[]>();
   for (const d of dailyClimate) {
@@ -62,11 +68,12 @@ function simulateDailyBucketBacktest(
     const slice = yearDays.slice(0, Math.min(yearDays.length, cycleDays));
     if (slice.length < 30) continue;
 
-    let soilWater = awcMm * 0.65;
+    let soilWater = awcMm * initMoistureFraction;
     let sumEtc = 0;
     let sumEta = 0;
     let sumRain = 0;
     let heavyRainDays = 0;
+    let extremeHeatDays = 0;
 
     for (const day of slice) {
       const rain = day.precipMm * rainMult;
@@ -74,6 +81,7 @@ function simulateDailyBucketBacktest(
       sumRain += rain;
       sumEtc += etc;
       if (rain >= 40) heavyRainDays++;
+      if (day.t2mMax + stress.tempDeltaC >= 39) extremeHeatDays++;
 
       soilWater = Math.min(awcMm, soilWater + rain * 0.88);
       if (hasIrrigation && soilWater < awcMm * 0.35) {
@@ -82,18 +90,26 @@ function simulateDailyBucketBacktest(
 
       // FAO-56 stress coefficient Ks when soil moisture drops below 45% of AWC
       const readilyAvailable = awcMm * 0.45;
-      const ks = soilWater >= readilyAvailable ? 1.0 : clamp(soilWater / readilyAvailable, 0.25, 1.0);
+      const ks = soilWater >= readilyAvailable ? 1.0 : clamp(soilWater / readilyAvailable, 0.05, 1.0);
       const eta = Math.min(soilWater, etc * ks);
       soilWater = Math.max(0, soilWater - eta);
       sumEta += eta;
     }
 
     totalEtcMm += sumEtc;
-    const etaRatio = clamp(sumEta / Math.max(1, sumEtc), 0.3, 1.0);
-    let relYield = 1 - ky * (1 - etaRatio);
+    const etaRatio = clamp(sumEta / Math.max(1, sumEtc), 0.0, 1.0);
+    // FAO-33 yield response, dropping to 0 under extreme desert/crop-failure deficit
+    let relYield = clamp(1 - ky * (1 - etaRatio), 0.0, 1.0);
+    if (etaRatio < 0.35) {
+      relYield *= etaRatio / 0.35;
+    }
+    // Extreme heat (>39C) pollination/thermal stress penalty
+    if (extremeHeatDays > 10) {
+      relYield -= Math.min(0.35, (extremeHeatDays - 10) * 0.008);
+    }
 
     let status: BacktestYearPoint['status'] = 'normal';
-    if (sumEta / Math.max(1, sumEtc) < 0.78) {
+    if (etaRatio < 0.78) {
       status = 'seca';
     } else if (heavyRainDays >= 4 || sumRain > 1100) {
       status = 'excesso';
@@ -103,7 +119,7 @@ function simulateDailyBucketBacktest(
 
     series.push({
       year,
-      relYieldPct: Math.round(clamp(relYield * 100, 25, 100)),
+      relYieldPct: Math.round(clamp(relYield * 100, 0, 100)),
       seasonRainMm: Math.round(sumRain),
       seasonEtcMm: Math.round(sumEtc),
       status,
@@ -111,9 +127,9 @@ function simulateDailyBucketBacktest(
   }
 
   const sorted = series.map((s) => s.relYieldPct).sort((a, b) => a - b);
-  const p10YieldPct = sorted[Math.floor(sorted.length * 0.1)] ?? 60;
-  const p50YieldPct = sorted[Math.floor(sorted.length * 0.5)] ?? 80;
-  const p90YieldPct = sorted[Math.floor(sorted.length * 0.9)] ?? 95;
+  const p10YieldPct = sorted[Math.floor(sorted.length * 0.1)] ?? 0;
+  const p50YieldPct = sorted[Math.floor(sorted.length * 0.5)] ?? 0;
+  const p90YieldPct = sorted[Math.floor(sorted.length * 0.9)] ?? 0;
   const failures = series.filter((s) => s.relYieldPct < 60).length;
   const failureRiskPct = series.length > 0 ? Math.round((failures / series.length) * 100) : 0;
   const meanSeasonEtcMm = series.length > 0 ? totalEtcMm / series.length : 450;
@@ -196,13 +212,13 @@ export function evaluateRotationScenarios(
   const drWaterIdx = Math.round(clamp(100 - droughtBt.meanSeasonEtcMm / 8.5, 20, 95));
   const forWaterIdx = Math.round(clamp(100 - forageBt.meanSeasonEtcMm / 8.5, 20, 95));
 
-  const baseYieldIdx = Math.round(clamp(baseBt.p50YieldPct - baseBt.failureRiskPct * 0.45, 20, 98));
-  const covYieldIdx = Math.round(clamp(coverBt.p50YieldPct - coverBt.failureRiskPct * 0.3, 20, 98));
-  const drYieldIdx = Math.round(clamp(droughtBt.p50YieldPct - droughtBt.failureRiskPct * 0.25, 20, 98));
+  const baseYieldIdx = Math.round(clamp(baseBt.p50YieldPct - baseBt.failureRiskPct * 0.45, 0, 98));
+  const covYieldIdx = Math.round(clamp(coverBt.p50YieldPct - coverBt.failureRiskPct * 0.3, 0, 98));
+  const drYieldIdx = Math.round(clamp(droughtBt.p50YieldPct - droughtBt.failureRiskPct * 0.25, 0, 98));
   const forYieldIdx = Math.round(
     clamp(
       forageBt.p50YieldPct - forageBt.failureRiskPct * 0.25 + (constraints.hasLivestock ? 10 : -8),
-      20,
+      0,
       98
     )
   );

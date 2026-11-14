@@ -32,11 +32,11 @@ function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
 
-function estimateDailyEt0(t2m: number, tMin: number, tMax: number, solarMjM2Day: number): number {
+function estimateDailyEt0(t2m: number, _tMin: number, _tMax: number, solarMjM2Day: number): number {
+  // Jensen-Haise / Hargreaves surface-radiation (Rs in MJ/m²/day) ET0
   const rad = solarMjM2Day > 0 && solarMjM2Day < 45 ? solarMjM2Day : 16.5;
-  const dT = Math.max(2, tMax - tMin);
-  const et0 = 0.0023 * (t2m + 17.8) * Math.sqrt(dT) * (rad * 0.408) * 0.48;
-  return Number(clamp(et0, 0.8, 9.5).toFixed(2));
+  const et0 = 0.0135 * Math.max(0, t2m + 17.8) * (rad * 0.408);
+  return Number(clamp(et0, 0.4, 11.5).toFixed(2));
 }
 
 async function fetchNasaPowerDaily(
@@ -44,7 +44,7 @@ async function fetchNasaPowerDaily(
   lng: number
 ): Promise<{ source: 'live-daily' | 'offline-fallback'; days: DailyClimateDay[] }> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 9500);
+  const timeoutId = setTimeout(() => controller.abort(), 22000);
 
   try {
     const url = `https://power.larc.nasa.gov/api/temporal/daily/point?parameters=T2M,T2M_MIN,T2M_MAX,PRECTOTCORR,ALLSKY_SFC_SW_DWN,RH2M,WS2M&community=AG&longitude=${lng.toFixed(
@@ -94,9 +94,71 @@ async function fetchNasaPowerDaily(
     return { source: 'live-daily', days };
   } catch {
     clearTimeout(timeoutId);
+    // Secondary real-data fallback: Open-Meteo ERA5 daily archive (2005-2024)
+    try {
+      const eraCtrl = new AbortController();
+      const eraTimer = setTimeout(() => eraCtrl.abort(), 15000);
+      const eraUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat.toFixed(
+        4
+      )}&longitude=${lng.toFixed(
+        4
+      )}&start_date=2005-01-01&end_date=2024-12-31&daily=temperature_2m_mean,temperature_2m_min,temperature_2m_max,precipitation_sum,et0_fao_evapotranspiration&models=era5`;
+      const eraRes = await fetch(eraUrl, { signal: eraCtrl.signal });
+      clearTimeout(eraTimer);
+      if (eraRes.ok) {
+        const eraJson = (await eraRes.json()) as {
+          daily?: {
+            time?: string[];
+            temperature_2m_mean?: (number | null)[];
+            temperature_2m_min?: (number | null)[];
+            temperature_2m_max?: (number | null)[];
+            precipitation_sum?: (number | null)[];
+            et0_fao_evapotranspiration?: (number | null)[];
+          };
+        };
+        const times = eraJson.daily?.time ?? [];
+        const tMean = eraJson.daily?.temperature_2m_mean ?? [];
+        const tMinArr = eraJson.daily?.temperature_2m_min ?? [];
+        const tMaxArr = eraJson.daily?.temperature_2m_max ?? [];
+        const precipArr = eraJson.daily?.precipitation_sum ?? [];
+        const et0Arr = eraJson.daily?.et0_fao_evapotranspiration ?? [];
+        const eraDays: DailyClimateDay[] = [];
+        for (let i = 0; i < times.length; i++) {
+          const t2m = tMean[i];
+          const pVal = precipArr[i];
+          if (typeof t2m !== 'number' || typeof pVal !== 'number') continue;
+          const dateStr = times[i].replaceAll('-', '');
+          const tMin = typeof tMinArr[i] === 'number' ? (tMinArr[i] as number) : t2m - 5;
+          const tMax = typeof tMaxArr[i] === 'number' ? (tMaxArr[i] as number) : t2m + 5;
+          const et0 =
+            typeof et0Arr[i] === 'number'
+              ? clamp(et0Arr[i] as number, 0.3, 12)
+              : estimateDailyEt0(t2m, tMin, tMax, 16.5);
+          eraDays.push({
+            date: dateStr,
+            year: Number(dateStr.slice(0, 4)),
+            month: Number(dateStr.slice(4, 6)),
+            t2m,
+            t2mMin: tMin,
+            t2mMax: tMax,
+            rh2m: 65,
+            ws2m: 2.2,
+            precipMm: Math.max(0, pVal),
+            et0Mm: et0,
+          });
+        }
+        if (eraDays.length >= 365) {
+          return { source: 'live-daily', days: eraDays };
+        }
+      }
+    } catch {
+      // Fall through to conservative offline fallback
+    }
+
     const absLat = Math.abs(lat);
-    const baseTemp = clamp(28 - absLat * 0.32, 11, 28);
-    const baseRainPerDay = absLat < 15 ? 4.8 : absLat > 35 ? 2.4 : 4.2;
+    const isSubtropicalAridBelt = absLat >= 18 && absLat <= 33;
+    const baseTemp = clamp(28 - absLat * 0.32, 11, 30);
+    const baseRainPerDay = isSubtropicalAridBelt ? 0.4 : absLat < 18 ? 4.5 : 2.8;
     const days: DailyClimateDay[] = [];
 
     for (let y = 2005; y <= 2024; y++) {
@@ -114,10 +176,10 @@ async function fetchNasaPowerDaily(
             t2m,
             t2mMin: tMin,
             t2mMax: tMax,
-            rh2m: 72,
+            rh2m: isSubtropicalAridBelt ? 28 : 72,
             ws2m: 2.1,
             precipMm,
-            et0Mm: estimateDailyEt0(t2m, tMin, tMax, 16),
+            et0Mm: estimateDailyEt0(t2m, tMin, tMax, isSubtropicalAridBelt ? 22 : 16),
           });
         }
       }
