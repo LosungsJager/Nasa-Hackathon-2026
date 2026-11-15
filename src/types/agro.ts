@@ -36,6 +36,8 @@ export interface CropInfo {
   pestBreakRole: string;
   defaultSecondCrop: string;
   sourceRef: string;
+  refPriceBrlTon: number;
+  estCostBrlHa: number;
 }
 
 export interface FarmerPriorities {
@@ -174,7 +176,12 @@ export interface RotationScenario {
   impact: {
     waterSavedM3Ha: number;       // Calculado da diferença de ETc/ETa
     nitrogenFixedKgHa: string;    // Faixa Embrapa
-    estMarginBrlHa: number;       // Estimativa ilustrativa
+    projectedYieldTonHa: number;  // Produtividade projetada (t/ha)
+    projectedPriceBrlTon: number; // Preço futuro simulado (R$/t)
+    estRevenueBrlHa: number;      // Receita bruta estimada (R$/ha)
+    estCostBrlHa: number;         // Custo estimado (R$/ha)
+    estMarginBrlHa: number;       // Margem líquida estimada (R$/ha)
+    totalAreaMarginBrl: number;   // Resultado financeiro total para a área (R$)
   };
   supportingData: { text: string; provenance: DataProvenance }[];
   benefits: string[];

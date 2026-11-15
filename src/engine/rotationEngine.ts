@@ -152,7 +152,8 @@ export function evaluateRotationScenarios(
   priorities: FarmerPriorities,
   constraints: FarmerConstraints,
   climateStress: ClimateStressScenario = { rainDeltaPct: 0, tempDeltaC: 0 },
-  lang: Lang = 'en'
+  lang: Lang = 'en',
+  priceDeltaPct: number = 0
 ): RotationScenario[] {
   const crop = cropsCatalog[currentCrop];
   const { indicators, soil, dailyClimate } = analysis;
@@ -249,8 +250,31 @@ export function evaluateRotationScenarios(
     clamp(siteSoilBase + 20 + (constraints.hasLivestock ? 7 : 0), 25, 96)
   );
 
-  const refTon = soil.historicalYieldTonHa[currentCrop] ?? 3.2;
-  const baseMargin = Math.round(refTon * 1100);
+  const refTon = soil.historicalYieldTonHa[currentCrop] ?? 3.4;
+  const simPriceBrlTon = Math.round(crop.refPriceBrlTon * (1 + priceDeltaPct / 100));
+  const projectFinance = (
+    p50YieldPct: number,
+    extraCostBrlHa: number,
+    nSavingBrlHa: number,
+    extraRevBrlHa: number
+  ) => {
+    const projectedYieldTonHa = Number((refTon * (p50YieldPct / 100)).toFixed(2));
+    const revScale = p50YieldPct > 0 ? p50YieldPct / 100 : 0;
+    const estRevenueBrlHa = Math.round(
+      projectedYieldTonHa * simPriceBrlTon + extraRevBrlHa * revScale * (1 + priceDeltaPct / 100)
+    );
+    const estCostBrlHa = Math.max(0, Math.round(crop.estCostBrlHa + extraCostBrlHa - nSavingBrlHa));
+    const estMarginBrlHa = estRevenueBrlHa - estCostBrlHa;
+    const totalAreaMarginBrl = Math.round(estMarginBrlHa * analysis.areaHa);
+    return {
+      projectedYieldTonHa,
+      projectedPriceBrlTon: simPriceBrlTon,
+      estRevenueBrlHa,
+      estCostBrlHa,
+      estMarginBrlHa,
+      totalAreaMarginBrl,
+    };
+  };
 
   // Calculated water saved (1 mm ETc = 10 m³/ha)
   const covWaterSaved = Math.max(0, Math.round((baseBt.meanSeasonEtcMm - coverBt.meanSeasonEtcMm) * 10));
@@ -289,7 +313,7 @@ export function evaluateRotationScenarios(
       impact: {
         waterSavedM3Ha: 0,
         nitrogenFixedKgHa: crop.nitrogenFixing ? '30–50 kg/ha' : '0 kg/ha',
-        estMarginBrlHa: Math.round(baseMargin * (baseBt.p50YieldPct / 100)),
+        ...projectFinance(baseBt.p50YieldPct, 0, 0, 650),
       },
       supportingData: [
         {
@@ -362,7 +386,7 @@ export function evaluateRotationScenarios(
       impact: {
         waterSavedM3Ha: covWaterSaved,
         nitrogenFixedKgHa: tr(lang, '60–110 kg/ha (faixa Embrapa)', '60–110 kg/ha (Embrapa range)'),
-        estMarginBrlHa: Math.round(baseMargin * (coverBt.p50YieldPct / 100) + 280),
+        ...projectFinance(coverBt.p50YieldPct, 320, 520, 720),
       },
       supportingData: [
         {
@@ -441,7 +465,7 @@ export function evaluateRotationScenarios(
       impact: {
         waterSavedM3Ha: drWaterSaved,
         nitrogenFixedKgHa: '15–30 kg/ha',
-        estMarginBrlHa: Math.round(baseMargin * (droughtBt.p50YieldPct / 100) + 160),
+        ...projectFinance(droughtBt.p50YieldPct, 180, 120, 780),
       },
       supportingData: [
         {
@@ -514,8 +538,11 @@ export function evaluateRotationScenarios(
       impact: {
         waterSavedM3Ha: forWaterSaved,
         nitrogenFixedKgHa: tr(lang, '40–80 kg/ha (com trevo)', '40–80 kg/ha (with clover)'),
-        estMarginBrlHa: Math.round(
-          baseMargin * (forageBt.p50YieldPct / 100) + (constraints.hasLivestock ? 420 : 90)
+        ...projectFinance(
+          forageBt.p50YieldPct,
+          280,
+          240,
+          constraints.hasLivestock ? 1150 : 620
         ),
       },
       supportingData: [

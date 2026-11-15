@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   AlertTriangle,
   CloudRain,
+  DollarSign,
   Droplets,
   HelpCircle,
   Repeat,
@@ -35,6 +36,8 @@ interface CropDashboardProps {
   onCropHistoryChange: (val: string) => void;
   climateStress: ClimateStressScenario;
   onClimateStressChange: (next: ClimateStressScenario) => void;
+  priceDeltaPct: number;
+  onPriceDeltaChange: (val: number) => void;
   scenarios: RotationScenario[];
   sensitivity: SensitivityResult | null;
   isLoading: boolean;
@@ -69,6 +72,8 @@ export function CropDashboard({
   onCropHistoryChange,
   climateStress,
   onClimateStressChange,
+  priceDeltaPct,
+  onPriceDeltaChange,
   scenarios,
   sensitivity,
   isLoading,
@@ -395,6 +400,115 @@ export function CropDashboard({
           )}
         </div>
       </section>
+
+      {/* 2b. Next-Season Future Price & Financial Simulator ($) */}
+      {(() => {
+        const bestSc = scenarios.find((s) => s.recommended) ?? scenarios[0];
+        const simPrice = Math.round(cropInfo.refPriceBrlTon * (1 + priceDeltaPct / 100));
+        return (
+          <section className="dash-card">
+            <div className="dash-card-header">
+              <div>
+                <h3>
+                  <DollarSign size={16} style={{ verticalAlign: 'text-bottom', marginRight: 4 }} />
+                  {tr(
+                    lang,
+                    'Simulador de Preço Futuro e Margem da Próxima Safra ($)',
+                    'Next-Season Future Price & Margin Simulator ($)'
+                  )}
+                </h3>
+                <p className="dash-sub">
+                  {getCropDisplayName(currentCrop, cropInfo.name, lang)} •{' '}
+                  {tr(lang, 'Preço base ref.:', 'Base ref. price:')} R${' '}
+                  {cropInfo.refPriceBrlTon.toLocaleString('pt-BR')}/t →{' '}
+                  <strong>
+                    {tr(lang, 'Simulado:', 'Simulated:')} R$ {simPrice.toLocaleString('pt-BR')}/t
+                  </strong>{' '}
+                  ({priceDeltaPct > 0 ? '+' : ''}
+                  {priceDeltaPct}%)
+                </p>
+              </div>
+              <div className="risk-chips">
+                {[
+                  { label: tr(lang, 'Pessimista (-15%)', 'Bear (-15%)'), val: -15 },
+                  { label: tr(lang, 'Base (0%)', 'Base (0%)'), val: 0 },
+                  { label: tr(lang, 'Otimista (+15%)', 'Bull (+15%)'), val: 15 },
+                ].map((preset) => (
+                  <button
+                    key={preset.val}
+                    type="button"
+                    className={`reset-stress-btn ${priceDeltaPct === preset.val ? 'active' : ''}`}
+                    style={
+                      priceDeltaPct === preset.val
+                        ? { background: '#004aad', color: '#ffffff', borderColor: '#004aad' }
+                        : undefined
+                    }
+                    onClick={() => onPriceDeltaChange(preset.val)}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="stress-sliders" style={{ marginBottom: 10 }}>
+              <label className="slider-row">
+                <div className="slider-header">
+                  <span>
+                    <TrendingUp size={13} />{' '}
+                    {tr(lang, 'Variação esperada no preço futuro da cultura', 'Expected future crop price change')}
+                  </span>
+                  <span className="slider-val">
+                    {priceDeltaPct > 0 ? '+' : ''}
+                    {priceDeltaPct}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={-25}
+                  max={25}
+                  step={5}
+                  value={priceDeltaPct}
+                  onChange={(e) => onPriceDeltaChange(Number(e.target.value))}
+                />
+              </label>
+            </div>
+
+            {bestSc && (
+              <div className="impact-kpis" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+                <div className="impact-kpi">
+                  <span className="kpi-label">
+                    {tr(lang, 'Receita bruta est.', 'Est. gross revenue')}
+                  </span>
+                  <strong>R$ {bestSc.impact.estRevenueBrlHa.toLocaleString('pt-BR')}/ha</strong>
+                </div>
+                <div className="impact-kpi">
+                  <span className="kpi-label">
+                    {tr(lang, 'Custo est. (c/ N)', 'Est. cost (net N)')}
+                  </span>
+                  <strong>R$ {bestSc.impact.estCostBrlHa.toLocaleString('pt-BR')}/ha</strong>
+                </div>
+                <div className="impact-kpi">
+                  <span className="kpi-label">
+                    {tr(lang, 'Margem líquida/ha', 'Net margin/ha')}
+                  </span>
+                  <strong style={{ color: bestSc.impact.estMarginBrlHa >= 0 ? '#166534' : '#b91c1c' }}>
+                    R$ {bestSc.impact.estMarginBrlHa.toLocaleString('pt-BR')}/ha
+                  </strong>
+                </div>
+                <div className="impact-kpi">
+                  <span className="kpi-label">
+                    {tr(lang, `Resultado (${analysis.areaHa} ha)`, `Total (${analysis.areaHa} ha)`)}
+                  </span>
+                  <strong style={{ color: bestSc.impact.totalAreaMarginBrl >= 0 ? '#166534' : '#b91c1c' }}>
+                    R$ {bestSc.impact.totalAreaMarginBrl.toLocaleString('pt-BR')}
+                  </strong>
+                </div>
+              </div>
+            )}
+          </section>
+        );
+      })()}
 
       {/* 3. The 4 Rotation Scenarios */}
       <section className="dash-scenarios-section">

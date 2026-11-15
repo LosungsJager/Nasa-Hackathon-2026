@@ -104,7 +104,19 @@ export function RotationDrawer({
               <div className="panel-rec-summary">
                 <span>{tr(lang, 'Água poupada', 'Water saved')}: <strong>{best.impact.waterSavedM3Ha} m³/ha</strong></span>
                 <span>•</span>
-                <span>{tr(lang, 'Nitrogênio', 'Nitrogen')}: <strong>{best.impact.nitrogenFixedKgHa}</strong></span>
+                <span>
+                  {tr(lang, 'Margem est.', 'Est. margin')}:{' '}
+                  <strong>R$ {best.impact.estMarginBrlHa.toLocaleString('pt-BR')}/ha</strong>
+                </span>
+                {areaHa !== null && (
+                  <>
+                    <span>•</span>
+                    <span>
+                      {tr(lang, `Total (${areaHa} ha)`, `Total (${areaHa} ha)`)}:{' '}
+                      <strong>R$ {best.impact.totalAreaMarginBrl.toLocaleString('pt-BR')}</strong>
+                    </span>
+                  </>
+                )}
               </div>
             </article>
 

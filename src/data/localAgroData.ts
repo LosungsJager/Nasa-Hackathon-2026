@@ -14,6 +14,8 @@ export const DEFAULT_CROPS_CATALOG: Record<CropId, CropInfo> = {
     pestBreakRole: 'Fixa N; requer rotação com gramíneas contra nematoides',
     defaultSecondCrop: 'Milho 2ª Safra',
     sourceRef: 'FAO-56 / Embrapa Soja',
+    refPriceBrlTon: 2150,
+    estCostBrlHa: 4100,
   },
   milho: {
     id: 'milho',
@@ -28,6 +30,8 @@ export const DEFAULT_CROPS_CATALOG: Record<CropId, CropInfo> = {
     pestBreakRole: 'Alta massa de palhada (C/N alto); reduz daninhas',
     defaultSecondCrop: 'Pousio / Soja',
     sourceRef: 'FAO-56 / FAO-33',
+    refPriceBrlTon: 1050,
+    estCostBrlHa: 4300,
   },
   algodao: {
     id: 'algodao',
@@ -42,6 +46,8 @@ export const DEFAULT_CROPS_CATALOG: Record<CropId, CropInfo> = {
     pestBreakRole: 'Ciclo longo; beneficia-se de milheto na entressafra',
     defaultSecondCrop: 'Milheto / Pousio',
     sourceRef: 'FAO-56 / CONAB',
+    refPriceBrlTon: 4800,
+    estCostBrlHa: 8900,
   },
   trigo: {
     id: 'trigo',
@@ -56,6 +62,8 @@ export const DEFAULT_CROPS_CATALOG: Record<CropId, CropInfo> = {
     pestBreakRole: 'Inverno; sensível a geada na floração e chuva na colheita',
     defaultSecondCrop: 'Soja',
     sourceRef: 'FAO-56 / ZARC-RS',
+    refPriceBrlTon: 1350,
+    estCostBrlHa: 2800,
   },
   feijao: {
     id: 'feijao',
@@ -70,6 +78,8 @@ export const DEFAULT_CROPS_CATALOG: Record<CropId, CropInfo> = {
     pestBreakRole: 'Ciclo curto pós-safra com fixação de N',
     defaultSecondCrop: 'Milho / Sorgo',
     sourceRef: 'FAO-56 / Embrapa',
+    refPriceBrlTon: 4200,
+    estCostBrlHa: 3600,
   },
   azevem: {
     id: 'azevem',
@@ -84,6 +94,8 @@ export const DEFAULT_CROPS_CATALOG: Record<CropId, CropInfo> = {
     pestBreakRole: 'Cobertura de inverno e pastejo no Vale do Taquari',
     defaultSecondCrop: 'Soja / Milho',
     sourceRef: 'EMATER-RS / UFRGS',
+    refPriceBrlTon: 650,
+    estCostBrlHa: 1450,
   },
   aveia: {
     id: 'aveia',
@@ -98,6 +110,8 @@ export const DEFAULT_CROPS_CATALOG: Record<CropId, CropInfo> = {
     pestBreakRole: 'Supressão de daninhas e proteção contra erosão',
     defaultSecondCrop: 'Soja / Milho',
     sourceRef: 'Embrapa Trigo / ZARC-RS',
+    refPriceBrlTon: 980,
+    estCostBrlHa: 1550,
   },
   canola: {
     id: 'canola',
@@ -112,6 +126,8 @@ export const DEFAULT_CROPS_CATALOG: Record<CropId, CropInfo> = {
     pestBreakRole: 'Alternativa de inverno para quebra de doenças de cereais',
     defaultSecondCrop: 'Soja',
     sourceRef: 'Embrapa Trigo / ZARC-RS',
+    refPriceBrlTon: 2450,
+    estCostBrlHa: 2600,
   },
   mandioca: {
     id: 'mandioca',
@@ -126,6 +142,8 @@ export const DEFAULT_CROPS_CATALOG: Record<CropId, CropInfo> = {
     pestBreakRole: 'Alta tolerância a veranicos; cultivo tradicional no RS',
     defaultSecondCrop: 'Aveia / Feijão',
     sourceRef: 'FAO-56 / EMATER-RS',
+    refPriceBrlTon: 780,
+    estCostBrlHa: 5400,
   },
   tifton85: {
     id: 'tifton85',
@@ -140,6 +158,8 @@ export const DEFAULT_CROPS_CATALOG: Record<CropId, CropInfo> = {
     pestBreakRole: 'Gramínea perene de alta cobertura; reduz erosão e produz feno/pastejo',
     defaultSecondCrop: 'Sobressemeadura Azevém',
     sourceRef: 'EMATER-RS / Embrapa Gado de Leite',
+    refPriceBrlTon: 820,
+    estCostBrlHa: 2200,
   },
 };
 

@@ -49,6 +49,7 @@ export function App() {
     rainDeltaPct: 0,
     tempDeltaC: 0,
   });
+  const [priceDeltaPct, setPriceDeltaPct] = useState<number>(0);
 
   const [nasaBasemap, setNasaBasemap] = useState<NasaBasemapId>('hybrid_hd');
   const [gibsLayer, setGibsLayer] = useState<GibsLayerId>('none');
@@ -155,9 +156,10 @@ export function App() {
       priorities,
       constraints,
       climateStress,
-      lang
+      lang,
+      priceDeltaPct
     );
-  }, [analysis, currentCrop, cropsCatalog, priorities, constraints, climateStress, lang]);
+  }, [analysis, currentCrop, cropsCatalog, priorities, constraints, climateStress, lang, priceDeltaPct]);
 
   const sensitivity = useMemo(() => {
     if (!analysis) return null;
@@ -393,6 +395,8 @@ export function App() {
                 onCropHistoryChange={setCropHistoryNote}
                 climateStress={climateStress}
                 onClimateStressChange={setClimateStress}
+                priceDeltaPct={priceDeltaPct}
+                onPriceDeltaChange={setPriceDeltaPct}
                 scenarios={scenarios}
                 sensitivity={sensitivity}
                 isLoading={isLoading}
