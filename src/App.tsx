@@ -23,7 +23,7 @@ import type {
 } from './types/agro';
 
 export function App() {
-  const [lang, setLang] = useState<Lang>('pt');
+  const [lang, setLang] = useState<Lang>('en');
   const [viewMode, setViewMode] = useState<AppViewMode>('map');
   const [mapCenter, setMapCenter] = useState<[number, number]>(REGION_PRESETS[0].center);
   const [mapZoom, setMapZoom] = useState<number>(REGION_PRESETS[0].zoom);
@@ -31,7 +31,7 @@ export function App() {
   const [cropsCatalog, setCropsCatalog] = useState<Record<CropId, CropInfo>>(DEFAULT_CROPS_CATALOG);
   const [currentCrop, setCurrentCrop] = useState<CropId>(REGION_PRESETS[0].defaultCrop);
   const [cropHistoryNote, setCropHistoryNote] = useState<string>(
-    'Soja (verão) + milho/pousio nos últimos 4 anos'
+    'Soybean (summer) + corn/fallow over the last 4 years'
   );
 
   const [priorities, setPriorities] = useState<FarmerPriorities>({
