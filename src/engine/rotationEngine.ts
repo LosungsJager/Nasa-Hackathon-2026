@@ -250,7 +250,19 @@ export function evaluateRotationScenarios(
     clamp(siteSoilBase + 20 + (constraints.hasLivestock ? 7 : 0), 25, 96)
   );
 
-  const refTon = soil.historicalYieldTonHa[currentCrop] ?? 3.4;
+  const DEFAULT_YIELD_TON_HA: Record<CropId, number> = {
+    soja: 3.4,
+    milho: 7.5,
+    algodao: 4.1,
+    trigo: 3.1,
+    feijao: 2.1,
+    azevem: 6.5,
+    aveia: 4.5,
+    canola: 1.9,
+    mandioca: 20.0,
+    tifton85: 14.0,
+  };
+  const refTon = soil.historicalYieldTonHa[currentCrop] ?? DEFAULT_YIELD_TON_HA[currentCrop] ?? 3.4;
   const simPriceBrlTon = Math.round(crop.refPriceBrlTon * (1 + priceDeltaPct / 100));
   const projectFinance = (
     p50YieldPct: number,

@@ -14,7 +14,7 @@ import {
   Tractor,
   TrendingUp,
 } from 'lucide-react';
-import { getCropDisplayName, tr, type Lang } from '../i18n';
+import { getCropDisplayName, tr, translateLevel, type Lang } from '../i18n';
 import type {
   ClimateStressScenario,
   CropId,
@@ -154,7 +154,7 @@ export function CropDashboard({
             {tr(lang, 'Solo:', 'Soil:')} {analysis.soil.soilClass} (AWC{' '}
             {analysis.soil.availableWaterCapacityMm} mm) •{' '}
             <span className={`conf-pill ${analysis.soil.confidenceLevel.toLowerCase()}`}>
-              {tr(lang, 'Confiança', 'Confidence')} {analysis.soil.confidenceLevel}
+              {tr(lang, 'Confiança', 'Confidence')} {translateLevel(analysis.soil.confidenceLevel, lang)}
             </span>
           </div>
         </div>
@@ -611,7 +611,7 @@ export function CropDashboard({
                     <span className="kpi-label">
                       <TrendingUp size={11} /> {tr(lang, 'Margem est.*', 'Est. margin*')}
                     </span>
-                    <strong>R$ {sc.impact.estMarginBrlHa}/ha</strong>
+                    <strong>R$ {sc.impact.estMarginBrlHa.toLocaleString('pt-BR')}/ha</strong>
                   </div>
                 </div>
 

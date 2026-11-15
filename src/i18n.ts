@@ -22,3 +22,11 @@ export const CROP_NAMES_EN: Record<CropId, string> = {
 export function getCropDisplayName(id: CropId, fallbackPt: string, lang: Lang): string {
   return lang === 'en' ? CROP_NAMES_EN[id] ?? fallbackPt : fallbackPt;
 }
+
+export function translateLevel(level: string, lang: Lang): string {
+  if (lang === 'pt') return level;
+  if (level === 'Alta' || level === 'Alto') return 'High';
+  if (level === 'Média' || level === 'Moderada' || level === 'Moderado') return 'Moderate';
+  if (level === 'Baixa' || level === 'Baixo') return 'Low';
+  return level;
+}

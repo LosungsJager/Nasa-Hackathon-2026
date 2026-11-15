@@ -1,5 +1,5 @@
 import { CheckSquare, ChevronDown, Globe, Layers, Leaf, Sliders } from 'lucide-react';
-import { getCropDisplayName, tr, type Lang } from '../i18n';
+import { getCropDisplayName, tr, translateLevel, type Lang } from '../i18n';
 import type {
   CropId,
   CropInfo,
@@ -235,7 +235,7 @@ export function ControlSidebar({
             <strong>{analysis.soil.municipality} ({analysis.areaHa} ha)</strong>
             <p>{analysis.soil.soilClass}</p>
             <p className="soil-src">
-              {tr(lang, 'Retenção de água', 'Water retention')}: {analysis.soil.waterRetentionCapacity} ({analysis.soil.availableWaterCapacityMm} mm)
+              {tr(lang, 'Retenção de água', 'Water retention')}: {translateLevel(analysis.soil.waterRetentionCapacity, lang)} ({analysis.soil.availableWaterCapacityMm} mm)
             </p>
           </div>
         </div>

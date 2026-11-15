@@ -161,17 +161,15 @@ export function FarmMap({
 
   const [draftPoints, setDraftPoints] = useState<[number, number][]>([]);
   const draftPointsRef = useRef<[number, number][]>([]);
-  draftPointsRef.current = draftPoints;
+  useEffect(() => {
+    draftPointsRef.current = draftPoints;
+  }, [draftPoints]);
 
   const [yearIdx, setYearIdx] = useState<number>(Math.max(0, backtestSeries.length - 3));
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isQuickPin, setIsQuickPin] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (backtestSeries.length > 0 && yearIdx >= backtestSeries.length) {
-      setYearIdx(backtestSeries.length - 1);
-    }
-  }, [backtestSeries.length, yearIdx]);
+  const initialCenterRef = useRef(center);
+  const initialZoomRef = useRef(zoom);
 
   useEffect(() => {
     if (!isPlaying || backtestSeries.length === 0) return;
@@ -185,8 +183,8 @@ export function FarmMap({
     if (!containerRef.current || mapRef.current) return;
 
     const map = L.map(containerRef.current, {
-      center,
-      zoom,
+      center: initialCenterRef.current,
+      zoom: initialZoomRef.current,
       maxZoom: 18,
       zoomControl: false,
     });
@@ -272,14 +270,12 @@ export function FarmMap({
     if (!map) return;
 
     if (!isDrawing) {
-      setDraftPoints([]);
       if (!isQuickPin) {
         map.getContainer().style.cursor = '';
       }
       return;
     }
 
-    setIsQuickPin(false);
     map.getContainer().style.cursor = 'crosshair';
 
     const handleClick = (e: L.LeafletMouseEvent) => {
@@ -340,13 +336,16 @@ export function FarmMap({
   }, [draftPoints]);
 
   // Render farm polygon colored by selected backtest year
+  const safeYearIdx =
+    backtestSeries.length > 0 ? Math.min(yearIdx, backtestSeries.length - 1) : 0;
+
   useEffect(() => {
     const layer = polyLayerRef.current;
     if (!layer) return;
     layer.clearLayers();
     if (!analysis) return;
 
-    const currentPt = backtestSeries[yearIdx];
+    const currentPt = backtestSeries[safeYearIdx];
     const fillColor = getPolygonYearColor(currentPt);
     const boundaryCoords = analysis.polygonGeoJson.geometry.coordinates[0].map(
       ([lng, lat]) => [lat, lng] as [number, number]
@@ -363,17 +362,19 @@ export function FarmMap({
       poly.bindTooltip(
         `<div style="font-family:Inter,sans-serif;font-size:12px;">
           <strong>${analysis.soil.municipality} (${analysis.areaHa} ha)</strong><br/>
-          Safra ${currentPt.year}: <b>${currentPt.relYieldPct}% do potencial</b><br/>
-          Chuva na safra: ${currentPt.seasonRainMm} mm | ETc: ${currentPt.seasonEtcMm} mm
+          ${lang === 'en' ? 'Season' : 'Safra'} ${currentPt.year}: <b>${currentPt.relYieldPct}% ${
+            lang === 'en' ? 'of potential' : 'do potencial'
+          }</b><br/>
+          ${lang === 'en' ? 'Season rain' : 'Chuva na safra'}: ${currentPt.seasonRainMm} mm | ETc: ${currentPt.seasonEtcMm} mm
         </div>`,
         { sticky: true }
       );
     }
 
     poly.addTo(layer);
-  }, [analysis, backtestSeries, yearIdx]);
+  }, [analysis, backtestSeries, safeYearIdx, lang]);
 
-  const currentPt = backtestSeries[yearIdx];
+  const currentPt = backtestSeries[safeYearIdx];
 
   return (
     <div className="map-wrapper">
@@ -508,7 +509,7 @@ export function FarmMap({
             className="tt-slider"
             min={0}
             max={backtestSeries.length - 1}
-            value={yearIdx}
+            value={safeYearIdx}
             onChange={(e) => {
               setIsPlaying(false);
               setYearIdx(Number(e.target.value));

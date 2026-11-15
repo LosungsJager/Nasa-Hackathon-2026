@@ -9,7 +9,7 @@ import { FarmMap } from './components/FarmMap';
 import { RotationDrawer } from './components/RotationDrawer';
 import { CropDashboard } from './components/CropDashboard';
 import { MethodologyView } from './components/MethodologyView';
-import { tr, type Lang } from './i18n';
+import { tr, translateLevel, type Lang } from './i18n';
 import type {
   AppViewMode,
   ClimateStressScenario,
@@ -360,12 +360,12 @@ export function App() {
                       </span>
                       <strong>
                         {analysis.indicators.slopePct === undefined
-                          ? `${tr(lang, 'Erosão', 'Erosion')} ${analysis.indicators.erosionLevel}`
+                          ? `${tr(lang, 'Erosão', 'Erosion')}: ${translateLevel(analysis.indicators.erosionLevel, lang)}`
                           : analysis.indicators.slopePct < 2
-                            ? `${tr(lang, 'Terreno plano', 'Flat terrain')} • ${tr(lang, 'Erosão', 'Erosion')} ${analysis.indicators.erosionLevel}`
+                            ? `${tr(lang, 'Terreno plano', 'Flat terrain')} • ${tr(lang, 'Erosão', 'Erosion')}: ${translateLevel(analysis.indicators.erosionLevel, lang)}`
                             : analysis.indicators.slopePct < 6
-                              ? `${tr(lang, 'Levemente inclinado', 'Gentle slope')} • ${tr(lang, 'Erosão', 'Erosion')} ${analysis.indicators.erosionLevel}`
-                              : `${tr(lang, 'Terreno inclinado', 'Steep slope')} • ${tr(lang, 'Erosão', 'Erosion')} ${analysis.indicators.erosionLevel}`}
+                              ? `${tr(lang, 'Levemente inclinado', 'Gentle slope')} • ${tr(lang, 'Erosão', 'Erosion')}: ${translateLevel(analysis.indicators.erosionLevel, lang)}`
+                              : `${tr(lang, 'Terreno inclinado', 'Steep slope')} • ${tr(lang, 'Erosão', 'Erosion')}: ${translateLevel(analysis.indicators.erosionLevel, lang)}`}
                       </strong>
                     </div>
                   </div>

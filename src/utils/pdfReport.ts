@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { getCropDisplayName, tr, type Lang } from '../i18n';
+import { getCropDisplayName, tr, translateLevel, type Lang } from '../i18n';
 import type {
   CropId,
   CropInfo,
@@ -7,6 +7,17 @@ import type {
   FarmerPriorities,
   RotationScenario,
 } from '../types/agro';
+
+function pdfSafe(value: string): string {
+  return value
+    .replaceAll('→', '->')
+    .replaceAll('≤', '<=')
+    .replaceAll('≥', '>=')
+    .replaceAll('−', '-')
+    .replaceAll('–', '-')
+    .replaceAll('₀', '0')
+    .replaceAll('…', '...');
+}
 
 export function generateAgronomistPdf(
   analysis: FarmAnalysis,
@@ -17,6 +28,12 @@ export function generateAgronomistPdf(
   lang: Lang = 'en'
 ): void {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const origText = doc.text.bind(doc);
+  doc.text = ((text: string | string[], x: number, yPos: number, options?: unknown) => {
+    const clean = Array.isArray(text) ? text.map(pdfSafe) : pdfSafe(text);
+    return origText(clean, x, yPos, options as never);
+  }) as typeof doc.text;
+
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 14;
@@ -64,26 +81,33 @@ export function generateAgronomistPdf(
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.3);
   const line1 = doc.splitTextToSize(
-    tr(
-      lang,
-      `Localidade: ${soil.municipality}  |  Área: ${analysis.areaHa} ha  |  Cultura principal: ${cropName}`,
-      `Location: ${soil.municipality}  |  Area: ${analysis.areaHa} ha  |  Main crop: ${cropName}`
+    pdfSafe(
+      tr(
+        lang,
+        `Localidade: ${soil.municipality}  |  Área: ${analysis.areaHa} ha  |  Cultura principal: ${cropName}`,
+        `Location: ${soil.municipality}  |  Area: ${analysis.areaHa} ha  |  Main crop: ${cropName}`
+      )
     ),
     innerWidth
   ) as string[];
+  const confLabel = translateLevel(soil.confidenceLevel, lang);
   const line2 = doc.splitTextToSize(
-    tr(
-      lang,
-      `Centroide: ${analysis.centroid[0].toFixed(4)}°, ${analysis.centroid[1].toFixed(4)}°  |  Fonte solo: ${soil.dataSourceLabel} (Confiança ${soil.confidenceLevel})`,
-      `Centroid: ${analysis.centroid[0].toFixed(4)}°, ${analysis.centroid[1].toFixed(4)}°  |  Soil source: ${soil.dataSourceLabel} (Confidence: ${soil.confidenceLevel})`
+    pdfSafe(
+      tr(
+        lang,
+        `Centroide: ${analysis.centroid[0].toFixed(4)}°, ${analysis.centroid[1].toFixed(4)}°  |  Fonte solo: ${soil.dataSourceLabel} (Confiança ${confLabel})`,
+        `Centroid: ${analysis.centroid[0].toFixed(4)}°, ${analysis.centroid[1].toFixed(4)}°  |  Soil source: ${soil.dataSourceLabel} (Confidence: ${confLabel})`
+      )
     ),
     innerWidth
   ) as string[];
   const line3 = doc.splitTextToSize(
-    tr(
-      lang,
-      `Solo: ${soil.soilClass} (${soil.texture}) | MO: ${soil.organicMatterPct}% | AWC: ${soil.availableWaterCapacityMm} mm`,
-      `Soil: ${soil.soilClass} (${soil.texture}) | OM: ${soil.organicMatterPct}% | AWC: ${soil.availableWaterCapacityMm} mm`
+    pdfSafe(
+      tr(
+        lang,
+        `Solo: ${soil.soilClass} (${soil.texture}) | MO: ${soil.organicMatterPct}% | AWC: ${soil.availableWaterCapacityMm} mm`,
+        `Soil: ${soil.soilClass} (${soil.texture}) | OM: ${soil.organicMatterPct}% | AWC: ${soil.availableWaterCapacityMm} mm`
+      )
     ),
     innerWidth
   ) as string[];
@@ -135,6 +159,7 @@ export function generateAgronomistPdf(
       ? tr(lang, '[MEDIDO - NASA POWER]', '[MEASURED - NASA POWER]')
       : tr(lang, '[ESTIMADO - OFFLINE]', '[ESTIMATED - OFFLINE]');
 
+  const erosionText = translateLevel(indicators.erosionLevel, lang);
   const metricsRows = [
     [
       tr(lang, 'Clima (2005–2024)', 'Climate (2005–2024)'),
@@ -167,8 +192,8 @@ export function generateAgronomistPdf(
       tr(lang, 'Risco de Erosão', 'Erosion Risk'),
       tr(
         lang,
-        `Índice: ${indicators.estimatedErosionIndex} / 100 (${indicators.erosionLevel})`,
-        `Index: ${indicators.estimatedErosionIndex} / 100 (${indicators.erosionLevel})`
+        `Índice: ${indicators.estimatedErosionIndex} / 100 (${erosionText})`,
+        `Index: ${indicators.estimatedErosionIndex} / 100 (${erosionText})`
       ),
       tr(lang, '[DERIVADO - SOLO + CHUVA]', '[DERIVED - SOIL + RAIN]'),
     ],
@@ -277,19 +302,23 @@ export function generateAgronomistPdf(
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8.8);
     const titleLines = doc.splitTextToSize(
-      `${sc.title} (${sc.subtitle}) — ${tr(lang, 'Índice', 'Score')}: ${sc.scores.overall}/100${
-        sc.recommended ? tr(lang, ' [MAIOR SCORE]', ' [TOP SCORE]') : ''
-      }`,
+      pdfSafe(
+        `${sc.title} (${sc.subtitle}) - ${tr(lang, 'Índice', 'Score')}: ${sc.scores.overall}/100${
+          sc.recommended ? tr(lang, ' [MAIOR SCORE]', ' [TOP SCORE]') : ''
+        }`
+      ),
       innerWidth
     ) as string[];
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.7);
     const backtestLines = doc.splitTextToSize(
-      tr(
-        lang,
-        `Backtest 2005–2024: P10=${sc.backtest.p10YieldPct}% | P50=${sc.backtest.p50YieldPct}% | P90=${sc.backtest.p90YieldPct}% | Quebra=${sc.backtest.failureRiskPct}% | ETc poupada=${sc.impact.waterSavedM3Ha} m3/ha | N=${sc.impact.nitrogenFixedKgHa}`,
-        `Backtest 2005–2024: P10=${sc.backtest.p10YieldPct}% | P50=${sc.backtest.p50YieldPct}% | P90=${sc.backtest.p90YieldPct}% | Failure=${sc.backtest.failureRiskPct}% | ETc saved=${sc.impact.waterSavedM3Ha} m3/ha | N=${sc.impact.nitrogenFixedKgHa}`
+      pdfSafe(
+        tr(
+          lang,
+          `Backtest 2005-2024: P10=${sc.backtest.p10YieldPct}% | P50=${sc.backtest.p50YieldPct}% | Quebra=${sc.backtest.failureRiskPct}% | ETc poupada=${sc.impact.waterSavedM3Ha} m3/ha | N=${sc.impact.nitrogenFixedKgHa} | Margem=R$ ${sc.impact.estMarginBrlHa}/ha (Total: R$ ${sc.impact.totalAreaMarginBrl})`,
+          `Backtest 2005-2024: P10=${sc.backtest.p10YieldPct}% | P50=${sc.backtest.p50YieldPct}% | Failure=${sc.backtest.failureRiskPct}% | ETc saved=${sc.impact.waterSavedM3Ha} m3/ha | N=${sc.impact.nitrogenFixedKgHa} | Margin=R$ ${sc.impact.estMarginBrlHa}/ha (Total: R$ ${sc.impact.totalAreaMarginBrl})`
+        )
       ),
       innerWidth
     ) as string[];
@@ -297,14 +326,14 @@ export function generateAgronomistPdf(
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.7);
     const gapLines = doc.splitTextToSize(
-      `${tr(lang, 'Lacunas:', 'Data gaps:')} ${sc.dataGaps.join(' ; ')}`,
+      pdfSafe(`${tr(lang, 'Lacunas:', 'Data gaps:')} ${sc.dataGaps.join(' ; ')}`),
       innerWidth
     ) as string[];
 
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(7.7);
     const noteLines = doc.splitTextToSize(
-      `${tr(lang, 'Agrônomo:', 'Agronomist:')} ${sc.agronomistNotes}`,
+      pdfSafe(`${tr(lang, 'Agrônomo:', 'Agronomist:')} ${sc.agronomistNotes}`),
       innerWidth
     ) as string[];
 
