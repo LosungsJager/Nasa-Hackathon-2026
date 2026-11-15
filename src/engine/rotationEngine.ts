@@ -1,3 +1,4 @@
+import { getCropDisplayName, tr, type Lang } from '../i18n';
 import type {
   BacktestYearPoint,
   ClimateStressScenario,
@@ -150,7 +151,8 @@ export function evaluateRotationScenarios(
   cropsCatalog: Record<CropId, CropInfo>,
   priorities: FarmerPriorities,
   constraints: FarmerConstraints,
-  climateStress: ClimateStressScenario = { rainDeltaPct: 0, tempDeltaC: 0 }
+  climateStress: ClimateStressScenario = { rainDeltaPct: 0, tempDeltaC: 0 },
+  lang: Lang = 'en'
 ): RotationScenario[] {
   const crop = cropsCatalog[currentCrop];
   const { indicators, soil, dailyClimate } = analysis;
@@ -255,18 +257,28 @@ export function evaluateRotationScenarios(
   const drWaterSaved = Math.max(0, Math.round((baseBt.meanSeasonEtcMm - droughtBt.meanSeasonEtcMm) * 10));
   const forWaterSaved = Math.max(0, Math.round((baseBt.meanSeasonEtcMm - forageBt.meanSeasonEtcMm) * 10));
 
+  const cropDisplay = getCropDisplayName(currentCrop, crop.name, lang);
+  const secondCropDisplay = tr(lang, crop.defaultSecondCrop, 'Corn / Fallow');
   const coverCropName =
-    lat < -22 ? 'Aveia Preta + Ervilhaca' : 'Braquiária + Crotalária';
+    lat < -22
+      ? tr(lang, 'Aveia Preta + Ervilhaca', 'Black Oat + Vetch')
+      : tr(lang, 'Braquiária + Crotalária', 'Brachiaria + Sunn Hemp');
   const droughtCropName =
-    currentCrop === 'trigo' ? 'Aveia Branca / Canola' : 'Sorgo Granífero / Milheto';
-  const forageCropName = 'Azevém + Aveia / Trevo (Pastejo)';
+    currentCrop === 'trigo'
+      ? tr(lang, 'Aveia Branca / Canola', 'White Oat / Canola')
+      : tr(lang, 'Sorgo Granífero / Milheto', 'Grain Sorghum / Pearl Millet');
+  const forageCropName = tr(
+    lang,
+    'Azevém + Aveia / Trevo (Pastejo)',
+    'Ryegrass + Oat / Clover (Grazing)'
+  );
 
   const raw: Omit<RotationScenario, 'recommended'>[] = [
     {
       id: 'baseline',
-      title: '1. Rotação Atual (Baseline)',
-      subtitle: `${crop.name} → ${crop.defaultSecondCrop}`,
-      sequence: [crop.name, crop.defaultSecondCrop, crop.name],
+      title: tr(lang, '1. Rotação Atual (Baseline)', '1. Current Rotation (Baseline)'),
+      subtitle: `${cropDisplay} → ${secondCropDisplay}`,
+      sequence: [cropDisplay, secondCropDisplay, cropDisplay],
       scores: {
         waterIndex: baseWaterIdx,
         yieldIndex: baseYieldIdx,
@@ -281,33 +293,65 @@ export function evaluateRotationScenarios(
       },
       supportingData: [
         {
-          text: `POWER (${indicators.powerPeriod}): chuva média ${indicators.annualMeanPrecipMm} mm/ano, T média ${indicators.annualAvgTempC} °C`,
+          text: tr(
+            lang,
+            `POWER (${indicators.powerPeriod}): chuva média ${indicators.annualMeanPrecipMm} mm/ano, T média ${indicators.annualAvgTempC} °C`,
+            `POWER (${indicators.powerPeriod}): mean rain ${indicators.annualMeanPrecipMm} mm/yr, mean T ${indicators.annualAvgTempC} °C`
+          ),
           provenance: powerTag,
         },
         {
-          text: `Balanço FAO-56: ETc média ${Math.round(baseBt.meanSeasonEtcMm)} mm/safra; P10 = ${baseBt.p10YieldPct}%`,
+          text: tr(
+            lang,
+            `Balanço FAO-56: ETc média ${Math.round(baseBt.meanSeasonEtcMm)} mm/safra; P10 = ${baseBt.p10YieldPct}%`,
+            `FAO-56 balance: mean ETc ${Math.round(baseBt.meanSeasonEtcMm)} mm/season; P10 = ${baseBt.p10YieldPct}%`
+          ),
           provenance: 'derivado',
         },
         {
-          text: `Parâmetros: Kc ${crop.kc}, Ky ${crop.ky} (${crop.sourceRef})`,
+          text: tr(
+            lang,
+            `Parâmetros: Kc ${crop.kc}, Ky ${crop.ky} (${crop.sourceRef})`,
+            `Parameters: Kc ${crop.kc}, Ky ${crop.ky} (${crop.sourceRef})`
+          ),
           provenance: 'premissa',
         },
       ],
       benefits: [
-        'Sem alteração de maquinário ou canal de venda atual',
-        `Referência base: ${baseBt.failureRiskPct}% de anos abaixo de 60% do potencial`,
+        tr(
+          lang,
+          'Sem alteração de maquinário ou canal de venda atual',
+          'No changes needed to current machinery or sales channel'
+        ),
+        tr(
+          lang,
+          `Referência base: ${baseBt.failureRiskPct}% de anos abaixo de 60% do potencial`,
+          `Baseline reference: ${baseBt.failureRiskPct}% of years below 60% yield potential`
+        ),
       ],
       dataGaps: [
-        'Sem análise química/física de solo (0–20 cm) da parcela',
-        'Custo real de insumos e frete não informado',
+        tr(
+          lang,
+          'Sem análise química/física de solo (0–20 cm) da parcela',
+          'No lab soil chemical/physical analysis (0–20 cm) for this plot'
+        ),
+        tr(
+          lang,
+          'Custo real de insumos e frete não informado',
+          'Actual input and freight costs not provided'
+        ),
       ],
-      agronomistNotes: `Checar compactação e nematoides em ${soil.soilClass}. Sem cobertura na entressafra, ${indicators.extremeRainDaysPerYear} dias/ano de chuva extrema elevam a erosão.`,
+      agronomistNotes: tr(
+        lang,
+        `Checar compactação e nematoides em ${soil.soilClass}. Sem cobertura na entressafra, ${indicators.extremeRainDaysPerYear} dias/ano de chuva extrema elevam a erosão.`,
+        `Check compaction and nematodes in ${soil.soilClass}. Without off-season cover, ${indicators.extremeRainDaysPerYear} extreme rain days/yr increase erosion.`
+      ),
     },
     {
       id: 'cover-legume',
-      title: '2. Cobertura + Leguminosas',
-      subtitle: `${crop.name} → ${coverCropName}`,
-      sequence: [crop.name, coverCropName, crop.name],
+      title: tr(lang, '2. Cobertura + Leguminosas', '2. Cover Crop + Legumes'),
+      subtitle: `${cropDisplay} → ${coverCropName}`,
+      sequence: [cropDisplay, coverCropName, cropDisplay],
       scores: {
         waterIndex: covWaterIdx,
         yieldIndex: covYieldIdx,
@@ -317,40 +361,76 @@ export function evaluateRotationScenarios(
       backtest: coverBt,
       impact: {
         waterSavedM3Ha: covWaterSaved,
-        nitrogenFixedKgHa: '60–110 kg/ha (faixa Embrapa)',
+        nitrogenFixedKgHa: tr(lang, '60–110 kg/ha (faixa Embrapa)', '60–110 kg/ha (Embrapa range)'),
         estMarginBrlHa: Math.round(baseMargin * (coverBt.p50YieldPct / 100) + 280),
       },
       supportingData: [
         {
-          text: `POWER: ${indicators.extremeRainDaysPerYear} dias/ano acima do P95 de chuva`,
+          text: tr(
+            lang,
+            `POWER: ${indicators.extremeRainDaysPerYear} dias/ano acima do P95 de chuva`,
+            `POWER: ${indicators.extremeRainDaysPerYear} days/yr above P95 extreme rainfall`
+          ),
           provenance: powerTag,
         },
         {
-          text: `Balanço FAO-56: ETc ${Math.round(coverBt.meanSeasonEtcMm)} mm/safra (−${covWaterSaved} m³/ha); quebra ${coverBt.failureRiskPct}%`,
+          text: tr(
+            lang,
+            `Balanço FAO-56: ETc ${Math.round(coverBt.meanSeasonEtcMm)} mm/safra (−${covWaterSaved} m³/ha); quebra ${coverBt.failureRiskPct}%`,
+            `FAO-56 balance: ETc ${Math.round(coverBt.meanSeasonEtcMm)} mm/season (−${covWaterSaved} m³/ha); failure ${coverBt.failureRiskPct}%`
+          ),
           provenance: 'derivado',
         },
         {
-          text: `Solo local (${soil.dataSourceLabel}): MO ${soil.organicMatterPct}%, AWC ${soil.availableWaterCapacityMm} mm`,
+          text: tr(
+            lang,
+            `Solo local (${soil.dataSourceLabel}): MO ${soil.organicMatterPct}%, AWC ${soil.availableWaterCapacityMm} mm`,
+            `Local soil (${soil.dataSourceLabel}): OM ${soil.organicMatterPct}%, AWC ${soil.availableWaterCapacityMm} mm`
+          ),
           provenance: 'premissa',
         },
       ],
       benefits: [
-        'Fixação biológica de N (60–110 kg/ha) reduz adubação mineral na safra seguinte',
-        'Palhada reduz escorrimento superficial e perda de solo por erosão',
+        tr(
+          lang,
+          'Fixação biológica de N (60–110 kg/ha) reduz adubação mineral na safra seguinte',
+          'Biological N fixation (60–110 kg/ha) reduces synthetic fertilizer in the next season'
+        ),
+        tr(
+          lang,
+          'Palhada reduz escorrimento superficial e perda de solo por erosão',
+          'Residue mulch reduces surface runoff and soil erosion'
+        ),
       ],
       dataGaps: [
-        'Disponibilidade de sementes e janela de plantio ZARC no município',
+        tr(
+          lang,
+          'Disponibilidade de sementes e janela de plantio ZARC no município',
+          'Local seed availability and regional planting window'
+        ),
         constraints.hasNoTillPlanter
-          ? 'Ajuste de dessecação antes da safra principal'
-          : 'Propriedade sem plantadeira direta informada (requer adaptação)',
+          ? tr(
+              lang,
+              'Ajuste de dessecação antes da safra principal',
+              'Termination timing adjustment before main crop planting'
+            )
+          : tr(
+              lang,
+              'Propriedade sem plantadeira direta informada (requer adaptação)',
+              'No no-till planter reported (requires equipment adaptation)'
+            ),
       ],
-      agronomistNotes: `Validar época de manejo/dessecação de ${coverCropName} para evitar competição hídrica na implantação de ${crop.name}.`,
+      agronomistNotes: tr(
+        lang,
+        `Validar época de manejo/dessecação de ${coverCropName} para evitar competição hídrica na implantação de ${cropDisplay}.`,
+        `Validate termination timing of ${coverCropName} to avoid water competition when establishing ${cropDisplay}.`
+      ),
     },
     {
       id: 'drought-tolerant',
-      title: '3. Cultura Tolerante à Seca',
-      subtitle: `${crop.name} → ${droughtCropName}`,
-      sequence: [crop.name, droughtCropName, crop.name],
+      title: tr(lang, '3. Cultura Tolerante à Seca', '3. Drought-Tolerant Crop'),
+      subtitle: `${cropDisplay} → ${droughtCropName}`,
+      sequence: [cropDisplay, droughtCropName, cropDisplay],
       scores: {
         waterIndex: drWaterIdx,
         yieldIndex: drYieldIdx,
@@ -365,33 +445,65 @@ export function evaluateRotationScenarios(
       },
       supportingData: [
         {
-          text: `POWER: déficit hídrico sazonal médio de ${indicators.seasonalWaterDeficitMm} mm; geadas ${indicators.frostDaysPerYear} d/ano`,
+          text: tr(
+            lang,
+            `POWER: déficit hídrico sazonal médio de ${indicators.seasonalWaterDeficitMm} mm; geadas ${indicators.frostDaysPerYear} d/ano`,
+            `POWER: mean seasonal water deficit ${indicators.seasonalWaterDeficitMm} mm; frost ${indicators.frostDaysPerYear} d/yr`
+          ),
           provenance: powerTag,
         },
         {
-          text: `Balanço FAO-56: ETc ${Math.round(droughtBt.meanSeasonEtcMm)} mm/safra (−${drWaterSaved} m³/ha); P10 = ${droughtBt.p10YieldPct}%`,
+          text: tr(
+            lang,
+            `Balanço FAO-56: ETc ${Math.round(droughtBt.meanSeasonEtcMm)} mm/safra (−${drWaterSaved} m³/ha); P10 = ${droughtBt.p10YieldPct}%`,
+            `FAO-56 balance: ETc ${Math.round(droughtBt.meanSeasonEtcMm)} mm/season (−${drWaterSaved} m³/ha); P10 = ${droughtBt.p10YieldPct}%`
+          ),
           provenance: 'derivado',
         },
         {
-          text: `Redução de Kc (×0,78) e Ky (×0,72) baseada em FAO-56/33`,
+          text: tr(
+            lang,
+            'Redução de Kc (×0,78) e Ky (×0,72) baseada em FAO-56/33',
+            'Kc (×0.78) and Ky (×0.72) reduction based on FAO-56/33'
+          ),
           provenance: 'premissa',
         },
       ],
       benefits: [
-        `Economia calculada de ${drWaterSaved} m³/ha pela menor demanda evapotranspirativa`,
-        `Reduz risco de quebra (< 60%) de ${baseBt.failureRiskPct}% para ${droughtBt.failureRiskPct}%`,
+        tr(
+          lang,
+          `Economia calculada de ${drWaterSaved} m³/ha pela menor demanda evapotranspirativa`,
+          `Calculated savings of ${drWaterSaved} m³/ha from lower evapotranspiration demand`
+        ),
+        tr(
+          lang,
+          `Reduz risco de quebra (< 60%) de ${baseBt.failureRiskPct}% para ${droughtBt.failureRiskPct}%`,
+          `Reduces crop failure risk (< 60%) from ${baseBt.failureRiskPct}% to ${droughtBt.failureRiskPct}%`
+        ),
       ],
       dataGaps: [
-        'Cotação regional atualizada (CONAB/cooperativa) para sorgo/milheto',
-        'Disponibilidade de plataforma/colhedora adaptada',
+        tr(
+          lang,
+          'Cotação regional atualizada (CONAB/cooperativa) para sorgo/milheto',
+          'Updated local market price for sorghum/millet'
+        ),
+        tr(
+          lang,
+          'Disponibilidade de plataforma/colhedora adaptada',
+          'Availability of adapted harvester header'
+        ),
       ],
-      agronomistNotes: `Confirmar comprador local para ${droughtCropName} em ${soil.municipality} e checar risco de geada (${indicators.frostDaysPerYear} dias ≤ 2 °C).`,
+      agronomistNotes: tr(
+        lang,
+        `Confirmar comprador local para ${droughtCropName} em ${soil.municipality} e checar risco de geada (${indicators.frostDaysPerYear} dias ≤ 2 °C).`,
+        `Confirm local buyer for ${droughtCropName} in ${soil.municipality} and check frost risk (${indicators.frostDaysPerYear} days ≤ 2 °C).`
+      ),
     },
     {
       id: 'forage-livestock',
-      title: '4. Forrageira / Integração Pecuária',
-      subtitle: `${crop.name} → ${forageCropName}`,
-      sequence: [crop.name, forageCropName, crop.name],
+      title: tr(lang, '4. Forrageira / Integração Pecuária', '4. Forage / Crop-Livestock'),
+      subtitle: `${cropDisplay} → ${forageCropName}`,
+      sequence: [cropDisplay, forageCropName, cropDisplay],
       scores: {
         waterIndex: forWaterIdx,
         yieldIndex: forYieldIdx,
@@ -401,35 +513,67 @@ export function evaluateRotationScenarios(
       backtest: forageBt,
       impact: {
         waterSavedM3Ha: forWaterSaved,
-        nitrogenFixedKgHa: '40–80 kg/ha (com trevo)',
+        nitrogenFixedKgHa: tr(lang, '40–80 kg/ha (com trevo)', '40–80 kg/ha (with clover)'),
         estMarginBrlHa: Math.round(
           baseMargin * (forageBt.p50YieldPct / 100) + (constraints.hasLivestock ? 420 : 90)
         ),
       },
       supportingData: [
         {
-          text: `POWER: ${indicators.frostDaysPerYear} dias/ano ≤ 2 °C (adequado para forrageiras de inverno)`,
+          text: tr(
+            lang,
+            `POWER: ${indicators.frostDaysPerYear} dias/ano ≤ 2 °C (adequado para forrageiras de inverno)`,
+            `POWER: ${indicators.frostDaysPerYear} days/yr ≤ 2 °C (suitable for cool-season forage)`
+          ),
           provenance: powerTag,
         },
         {
-          text: `Balanço FAO-56: P50 = ${forageBt.p50YieldPct}%, quebra = ${forageBt.failureRiskPct}%`,
+          text: tr(
+            lang,
+            `Balanço FAO-56: P50 = ${forageBt.p50YieldPct}%, quebra = ${forageBt.failureRiskPct}%`,
+            `FAO-56 balance: P50 = ${forageBt.p50YieldPct}%, failure = ${forageBt.failureRiskPct}%`
+          ),
           provenance: 'derivado',
         },
         {
-          text: `Referência EMATER-RS / UFRGS para integração lavoura-pecuária no Vale do Taquari`,
+          text: tr(
+            lang,
+            'Referência EMATER-RS / UFRGS para integração lavoura-pecuária no Vale do Taquari',
+            'EMATER-RS / UFRGS reference for integrated crop-livestock systems'
+          ),
           provenance: 'premissa',
         },
       ],
       benefits: [
-        'Renda extra com pastejo/silagem de leite ou corte no inverno',
-        'Cobertura densa protege o solo contra chuvas intensas de outono/primavera',
+        tr(
+          lang,
+          'Renda extra com pastejo/silagem de leite ou corte no inverno',
+          'Extra income from off-season dairy/beef grazing or silage'
+        ),
+        tr(
+          lang,
+          'Cobertura densa protege o solo contra chuvas intensas de outono/primavera',
+          'Dense canopy protects topsoil from heavy autumn/spring rainfall'
+        ),
       ],
       dataGaps: [
         constraints.hasLivestock
-          ? 'Lotação animal (UA/ha) para evitar compactação superficial'
-          : 'Propriedade sem rebanho informado (exige arrendamento de pasto ou venda de feno)',
+          ? tr(
+              lang,
+              'Lotação animal (UA/ha) para evitar compactação superficial',
+              'Stocking rate (AU/ha) to prevent surface soil compaction'
+            )
+          : tr(
+              lang,
+              'Propriedade sem rebanho informado (exige arrendamento de pasto ou venda de feno)',
+              'No livestock reported (requires pasture lease or hay sale)'
+            ),
       ],
-      agronomistNotes: `Ajustar altura de entrada e saída dos animais para manter massa residual mínima na implantação de ${crop.name}.`,
+      agronomistNotes: tr(
+        lang,
+        `Ajustar altura de entrada e saída dos animais para manter massa residual mínima na implantação de ${cropDisplay}.`,
+        `Manage grazing entry/exit height to preserve minimum residue cover before planting ${cropDisplay}.`
+      ),
     },
   ];
 
@@ -452,12 +596,19 @@ export function runSensitivityAnalysis(
   cropsCatalog: Record<CropId, CropInfo>,
   priorities: FarmerPriorities,
   constraints: FarmerConstraints,
-  climateStress: ClimateStressScenario
+  climateStress: ClimateStressScenario,
+  lang: Lang = 'en'
 ): SensitivityResult {
   const baseWinner =
-    evaluateRotationScenarios(analysis, currentCrop, cropsCatalog, priorities, constraints, climateStress).find(
-      (s) => s.recommended
-    )?.title ?? '';
+    evaluateRotationScenarios(
+      analysis,
+      currentCrop,
+      cropsCatalog,
+      priorities,
+      constraints,
+      climateStress,
+      lang
+    ).find((s) => s.recommended)?.title ?? '';
 
   const pickWinner = (kcMult: number, kyMult: number) => {
     const modCatalog: Record<CropId, CropInfo> = {
@@ -469,9 +620,15 @@ export function runSensitivityAnalysis(
       },
     };
     return (
-      evaluateRotationScenarios(analysis, currentCrop, modCatalog, priorities, constraints, climateStress).find(
-        (s) => s.recommended
-      )?.title ?? ''
+      evaluateRotationScenarios(
+        analysis,
+        currentCrop,
+        modCatalog,
+        priorities,
+        constraints,
+        climateStress,
+        lang
+      ).find((s) => s.recommended)?.title ?? ''
     );
   };
 

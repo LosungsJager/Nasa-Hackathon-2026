@@ -154,9 +154,10 @@ export function App() {
       cropsCatalog,
       priorities,
       constraints,
-      climateStress
+      climateStress,
+      lang
     );
-  }, [analysis, currentCrop, cropsCatalog, priorities, constraints, climateStress]);
+  }, [analysis, currentCrop, cropsCatalog, priorities, constraints, climateStress, lang]);
 
   const sensitivity = useMemo(() => {
     if (!analysis) return null;
@@ -166,13 +167,14 @@ export function App() {
       cropsCatalog,
       priorities,
       constraints,
-      climateStress
+      climateStress,
+      lang
     );
-  }, [analysis, currentCrop, cropsCatalog, priorities, constraints, climateStress]);
+  }, [analysis, currentCrop, cropsCatalog, priorities, constraints, climateStress, lang]);
 
   const handleDownloadPdf = () => {
     if (!analysis || scenarios.length === 0) return;
-    generateAgronomistPdf(analysis, currentCrop, cropsCatalog, priorities, scenarios);
+    generateAgronomistPdf(analysis, currentCrop, cropsCatalog, priorities, scenarios, lang);
   };
 
   return (
