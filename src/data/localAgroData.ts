@@ -127,6 +127,20 @@ export const DEFAULT_CROPS_CATALOG: Record<CropId, CropInfo> = {
     defaultSecondCrop: 'Aveia / Feijão',
     sourceRef: 'FAO-56 / EMATER-RS',
   },
+  tifton85: {
+    id: 'tifton85',
+    name: 'Tifton 85 (Pastagem/Feno)',
+    cycleDays: 180,
+    waterDemandMm: 520,
+    kc: 0.95,
+    ky: 0.82,
+    nitrogenFixing: false,
+    heatTolerance: 'Alta',
+    residueCover: 'Alta',
+    pestBreakRole: 'Gramínea perene de alta cobertura; reduz erosão e produz feno/pastejo',
+    defaultSecondCrop: 'Sobressemeadura Azevém',
+    sourceRef: 'EMATER-RS / Embrapa Gado de Leite',
+  },
 };
 
 export const REGION_PRESETS: RegionPreset[] = [

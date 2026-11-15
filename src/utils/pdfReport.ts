@@ -18,9 +18,19 @@ export function generateAgronomistPdf(
 ): void {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 14;
   const contentWidth = pageWidth - margin * 2;
+  const innerWidth = contentWidth - 8;
+  const lineH = 4.1;
   let y = 16;
+
+  const ensureSpace = (needed: number) => {
+    if (y + needed > pageHeight - 14) {
+      doc.addPage();
+      y = 16;
+    }
+  };
 
   const cropName = getCropDisplayName(currentCrop, cropsCatalog[currentCrop].name, lang);
   const { indicators, soil } = analysis;
@@ -30,14 +40,14 @@ export function generateAgronomistPdf(
   doc.rect(0, 0, pageWidth, 26, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
+  doc.setFontSize(14.5);
   doc.text(
     tr(lang, 'FARMBOOST — Relatório para o Agrônomo', 'FARMBOOST — Agronomist Field Report'),
     margin,
     12
   );
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.2);
   doc.text(
     tr(
       lang,
@@ -48,16 +58,46 @@ export function generateAgronomistPdf(
     19.5
   );
 
-  y = 33;
+  y = 32;
 
-  // 1. Farm & Soil Summary
+  // 1. Farm & Soil Summary (dynamic height to avoid any overlap)
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.3);
+  const line1 = doc.splitTextToSize(
+    tr(
+      lang,
+      `Localidade: ${soil.municipality}  |  Área: ${analysis.areaHa} ha  |  Cultura principal: ${cropName}`,
+      `Location: ${soil.municipality}  |  Area: ${analysis.areaHa} ha  |  Main crop: ${cropName}`
+    ),
+    innerWidth
+  ) as string[];
+  const line2 = doc.splitTextToSize(
+    tr(
+      lang,
+      `Centroide: ${analysis.centroid[0].toFixed(4)}°, ${analysis.centroid[1].toFixed(4)}°  |  Fonte solo: ${soil.dataSourceLabel} (Confiança ${soil.confidenceLevel})`,
+      `Centroid: ${analysis.centroid[0].toFixed(4)}°, ${analysis.centroid[1].toFixed(4)}°  |  Soil source: ${soil.dataSourceLabel} (Confidence: ${soil.confidenceLevel})`
+    ),
+    innerWidth
+  ) as string[];
+  const line3 = doc.splitTextToSize(
+    tr(
+      lang,
+      `Solo: ${soil.soilClass} (${soil.texture}) | MO: ${soil.organicMatterPct}% | AWC: ${soil.availableWaterCapacityMm} mm`,
+      `Soil: ${soil.soilClass} (${soil.texture}) | OM: ${soil.organicMatterPct}% | AWC: ${soil.availableWaterCapacityMm} mm`
+    ),
+    innerWidth
+  ) as string[];
+
+  const summaryLines = [...line1, ...line2, ...line3];
+  const summaryBoxH = 12 + summaryLines.length * 4.6;
+
   doc.setFillColor(245, 248, 252);
   doc.setDrawColor(200, 212, 228);
-  doc.roundedRect(margin, y, contentWidth, 27, 1.5, 1.5, 'FD');
+  doc.roundedRect(margin, y, contentWidth, summaryBoxH, 1.5, 1.5, 'FD');
 
   doc.setTextColor(15, 31, 56);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10.5);
+  doc.setFontSize(10.2);
   doc.text(
     tr(lang, '1. Identificação do Talhão e Solo', '1. Field & Soil Identification'),
     margin + 4,
@@ -65,45 +105,24 @@ export function generateAgronomistPdf(
   );
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.text(
-    tr(
-      lang,
-      `Localidade: ${soil.municipality}  |  Área: ${analysis.areaHa} ha  |  Cultura principal: ${cropName}`,
-      `Location: ${soil.municipality}  |  Area: ${analysis.areaHa} ha  |  Main crop: ${cropName}`
-    ),
-    margin + 4,
-    y + 12.5
-  );
-  doc.text(
-    tr(
-      lang,
-      `Centroide: ${analysis.centroid[0].toFixed(4)}°, ${analysis.centroid[1].toFixed(4)}°  |  Fonte solo: ${soil.dataSourceLabel} (Confiança ${soil.confidenceLevel})`,
-      `Centroid: ${analysis.centroid[0].toFixed(4)}°, ${analysis.centroid[1].toFixed(4)}°  |  Soil source: ${soil.dataSourceLabel} (Confidence: ${soil.confidenceLevel})`
-    ),
-    margin + 4,
-    y + 18
-  );
-  doc.text(
-    tr(
-      lang,
-      `Solo: ${soil.soilClass} (${soil.texture}) | MO: ${soil.organicMatterPct}% | AWC: ${soil.availableWaterCapacityMm} mm`,
-      `Soil: ${soil.soilClass} (${soil.texture}) | OM: ${soil.organicMatterPct}% | AWC: ${soil.availableWaterCapacityMm} mm`
-    ),
-    margin + 4,
-    y + 23.5
-  );
+  doc.setFontSize(8.3);
+  let sy = y + 12.2;
+  summaryLines.forEach((ln) => {
+    doc.text(ln, margin + 4, sy);
+    sy += 4.6;
+  });
 
-  y += 33;
+  y += summaryBoxH + 6;
 
-  // 2. Measured vs Derived Indicators
+  // 2. Measured vs Derived Indicators (right-aligned tag column prevents overlap)
+  ensureSpace(36);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10.5);
+  doc.setFontSize(10.2);
   doc.setTextColor(15, 31, 56);
   doc.text(
     tr(
       lang,
-      '2. Indicadores do Talhão (Legenda: Medido vs. Derivado/Estimado)',
+      '2. Indicadores do Talhão (Medido vs. Derivado/Estimado)',
       '2. Field Indicators (Measured vs. Derived/Estimated)'
     ),
     margin,
@@ -139,8 +158,8 @@ export function generateAgronomistPdf(
       tr(lang, 'ET0 e Déficit Hídrico', 'ET0 & Water Deficit'),
       tr(
         lang,
-        `ET0 média: ${indicators.meanEt0MmDay} mm/dia | Déficit sazonal: ${indicators.seasonalWaterDeficitMm} mm`,
-        `Mean ET0: ${indicators.meanEt0MmDay} mm/day | Seasonal deficit: ${indicators.seasonalWaterDeficitMm} mm`
+        `ET0 média: ${indicators.meanEt0MmDay} mm/dia | Déficit: ${indicators.seasonalWaterDeficitMm} mm`,
+        `Mean ET0: ${indicators.meanEt0MmDay} mm/d | Deficit: ${indicators.seasonalWaterDeficitMm} mm`
       ),
       tr(lang, '[DERIVADO - HARGREAVES]', '[DERIVED - HARGREAVES]'),
     ],
@@ -155,31 +174,32 @@ export function generateAgronomistPdf(
     ],
   ];
 
-  doc.setFontSize(8.2);
+  doc.setFontSize(8);
   metricsRows.forEach((row, idx) => {
-    const rowY = y + idx * 6.5;
+    const rowY = y + idx * 6.8;
     if (idx % 2 === 0) {
       doc.setFillColor(245, 248, 252);
-      doc.rect(margin, rowY, contentWidth, 6.5, 'F');
+      doc.rect(margin, rowY, contentWidth, 6.8, 'F');
     }
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0, 74, 173);
-    doc.text(row[0], margin + 2, rowY + 4.5);
+    doc.text(row[0], margin + 2, rowY + 4.7);
 
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(35, 45, 60);
-    doc.text(row[1], margin + 40, rowY + 4.5);
+    doc.text(row[1], margin + 40, rowY + 4.7);
 
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(80, 95, 115);
-    doc.text(row[2], margin + 132, rowY + 4.5);
+    doc.text(row[2], pageWidth - margin - 2, rowY + 4.7, { align: 'right' });
   });
 
-  y += metricsRows.length * 6.5 + 7;
+  y += metricsRows.length * 6.8 + 6;
 
-  // 3. Comparison Chart
+  // 3. Comparison Chart (wider label column so titles never touch bars)
+  ensureSpace(50);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10.5);
+  doc.setFontSize(10.2);
   doc.setTextColor(15, 31, 56);
   doc.text(
     tr(lang, '3. Comparativo das 4 Rotações (Índices 0–100)', '3. 4-Rotation Comparison (0–100 Scores)'),
@@ -199,14 +219,14 @@ export function generateAgronomistPdf(
     [126, 217, 87],
   ];
 
-  doc.setFontSize(7.8);
+  doc.setFontSize(7.6);
   const legends = [
     tr(lang, 'Uso de Água', 'Water Efficiency'),
     tr(lang, 'Potencial de Rendimento', 'Yield Potential'),
     tr(lang, 'Benefício ao Solo', 'Soil Health'),
   ];
   legends.forEach((label, i) => {
-    const lx = margin + 6 + i * 54;
+    const lx = margin + 56 + i * 42;
     doc.setFillColor(...barColors[i]);
     doc.rect(lx, y + 3.2, 3.2, 3.2, 'F');
     doc.setTextColor(40, 50, 65);
@@ -216,29 +236,31 @@ export function generateAgronomistPdf(
   scenarios.forEach((sc, idx) => {
     const rowY = y + 10.5 + idx * 7.5;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.8);
+    doc.setFontSize(7.6);
     doc.setTextColor(15, 31, 56);
-    doc.text(sc.title.slice(0, 24), margin + 4, rowY + 4);
+    const shortTitle = sc.title.length > 25 ? `${sc.title.slice(0, 24)}…` : sc.title;
+    doc.text(shortTitle, margin + 4, rowY + 4);
 
     const vals = [sc.scores.waterIndex, sc.scores.yieldIndex, sc.scores.soilIndex];
     vals.forEach((val, bIdx) => {
-      const bx = margin + 48 + bIdx * 43;
-      const maxBarW = 28;
+      const bx = margin + 56 + bIdx * 42;
+      const maxBarW = 26;
       doc.setFillColor(229, 235, 242);
       doc.rect(bx, rowY + 1, maxBarW, 3.8, 'F');
       doc.setFillColor(...barColors[bIdx]);
       doc.rect(bx, rowY + 1, (val / 100) * maxBarW, 3.8, 'F');
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(40, 50, 65);
-      doc.text(`${val}`, bx + maxBarW + 1.5, rowY + 4);
+      doc.text(`${val}`, bx + maxBarW + 1.8, rowY + 4);
     });
   });
 
-  y += chartHeight + 7;
+  y += chartHeight + 6;
 
-  // 4. Scenarios, Gaps & Agronomist Notes
+  // 4. Scenarios, Gaps & Agronomist Notes (100% dynamic box height)
+  ensureSpace(24);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10.5);
+  doc.setFontSize(10.2);
   doc.setTextColor(15, 31, 56);
   doc.text(
     tr(
@@ -252,63 +274,93 @@ export function generateAgronomistPdf(
   y += 4.5;
 
   scenarios.forEach((sc) => {
-    if (y > 242) {
-      doc.addPage();
-      y = 16;
-    }
-
-    const boxH = 34;
-    doc.setDrawColor(sc.recommended ? 0 : 205, sc.recommended ? 74 : 215, sc.recommended ? 173 : 225);
-    doc.setFillColor(sc.recommended ? 245 : 252, sc.recommended ? 249 : 253, 255);
-    doc.roundedRect(margin, y, contentWidth, boxH, 1.5, 1.5, 'FD');
-
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(15, 31, 56);
-    doc.text(
+    doc.setFontSize(8.8);
+    const titleLines = doc.splitTextToSize(
       `${sc.title} (${sc.subtitle}) — ${tr(lang, 'Índice', 'Score')}: ${sc.scores.overall}/100${
         sc.recommended ? tr(lang, ' [MAIOR SCORE]', ' [TOP SCORE]') : ''
       }`,
-      margin + 3.5,
-      y + 5.5
-    );
+      innerWidth
+    ) as string[];
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.8);
-    doc.setTextColor(0, 74, 173);
-    doc.text(
+    doc.setFontSize(7.7);
+    const backtestLines = doc.splitTextToSize(
       tr(
         lang,
         `Backtest 2005–2024: P10=${sc.backtest.p10YieldPct}% | P50=${sc.backtest.p50YieldPct}% | P90=${sc.backtest.p90YieldPct}% | Quebra=${sc.backtest.failureRiskPct}% | ETc poupada=${sc.impact.waterSavedM3Ha} m3/ha | N=${sc.impact.nitrogenFixedKgHa}`,
         `Backtest 2005–2024: P10=${sc.backtest.p10YieldPct}% | P50=${sc.backtest.p50YieldPct}% | P90=${sc.backtest.p90YieldPct}% | Failure=${sc.backtest.failureRiskPct}% | ETc saved=${sc.impact.waterSavedM3Ha} m3/ha | N=${sc.impact.nitrogenFixedKgHa}`
       ),
-      margin + 3.5,
-      y + 10.8
-    );
+      innerWidth
+    ) as string[];
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.8);
-    doc.setTextColor(50, 60, 75);
-    const gapText = `${tr(lang, 'Lacunas:', 'Data gaps:')} ${sc.dataGaps.join(' ; ')}`;
-    const gapLines = doc.splitTextToSize(gapText, contentWidth - 7);
-    doc.text(gapLines.slice(0, 2), margin + 3.5, y + 16);
+    doc.setFontSize(7.7);
+    const gapLines = doc.splitTextToSize(
+      `${tr(lang, 'Lacunas:', 'Data gaps:')} ${sc.dataGaps.join(' ; ')}`,
+      innerWidth
+    ) as string[];
 
     doc.setFont('helvetica', 'italic');
-    doc.setTextColor(110, 65, 15);
+    doc.setFontSize(7.7);
     const noteLines = doc.splitTextToSize(
       `${tr(lang, 'Agrônomo:', 'Agronomist:')} ${sc.agronomistNotes}`,
-      contentWidth - 7
-    );
-    doc.text(noteLines.slice(0, 2), margin + 3.5, y + 25.5);
+      innerWidth
+    ) as string[];
+
+    const boxH =
+      8 +
+      titleLines.length * 4.3 +
+      backtestLines.length * lineH +
+      gapLines.length * lineH +
+      noteLines.length * lineH +
+      3;
+
+    ensureSpace(boxH + 4);
+
+    doc.setDrawColor(sc.recommended ? 0 : 205, sc.recommended ? 74 : 215, sc.recommended ? 173 : 225);
+    doc.setFillColor(sc.recommended ? 245 : 252, sc.recommended ? 249 : 253, 255);
+    doc.roundedRect(margin, y, contentWidth, boxH, 1.5, 1.5, 'FD');
+
+    let cy = y + 5.5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.8);
+    doc.setTextColor(15, 31, 56);
+    titleLines.forEach((ln) => {
+      doc.text(ln, margin + 4, cy);
+      cy += 4.3;
+    });
+
+    cy += 0.6;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.7);
+    doc.setTextColor(0, 74, 173);
+    backtestLines.forEach((ln) => {
+      doc.text(ln, margin + 4, cy);
+      cy += lineH;
+    });
+
+    cy += 0.6;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(50, 60, 75);
+    gapLines.forEach((ln) => {
+      doc.text(ln, margin + 4, cy);
+      cy += lineH;
+    });
+
+    cy += 0.6;
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(110, 65, 15);
+    noteLines.forEach((ln) => {
+      doc.text(ln, margin + 4, cy);
+      cy += lineH;
+    });
 
     y += boxH + 3.5;
   });
 
   // Footer
-  if (y > 268) {
-    doc.addPage();
-    y = 20;
-  }
+  ensureSpace(14);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(100, 110, 125);

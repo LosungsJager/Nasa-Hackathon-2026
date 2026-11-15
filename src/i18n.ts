@@ -16,6 +16,7 @@ export const CROP_NAMES_EN: Record<CropId, string> = {
   aveia: 'Black Oats',
   canola: 'Canola',
   mandioca: 'Cassava',
+  tifton85: 'Tifton 85 (Bermudagrass)',
 };
 
 export function getCropDisplayName(id: CropId, fallbackPt: string, lang: Lang): string {

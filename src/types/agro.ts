@@ -20,7 +20,8 @@ export type CropId =
   | 'azevem'
   | 'aveia'
   | 'canola'
-  | 'mandioca';
+  | 'mandioca'
+  | 'tifton85';
 
 export interface CropInfo {
   id: CropId;
